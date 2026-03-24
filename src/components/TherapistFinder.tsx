@@ -26,7 +26,7 @@ export function TherapistFinder({ profile }: Props) {
     setSearched(false);
 
     try {
-      const resp = await fetch('/.netlify/functions/therapist-finder', {
+      const resp = await fetch('/api/therapist-finder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -49,7 +49,7 @@ export function TherapistFinder({ profile }: Props) {
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error';
       setError(msg.includes('Failed to fetch')
-        ? 'Cannot connect to search service. Make sure ANTHROPIC_API_KEY is set in Netlify environment variables.'
+        ? 'Cannot connect to search service. Make sure ANTHROPIC_API_KEY is set in Vercel environment variables.'
         : msg
       );
     } finally {

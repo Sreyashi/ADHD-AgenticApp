@@ -34,9 +34,9 @@ Also powered by Claude claude-sonnet-4-6:
 | Styling | Tailwind CSS |
 | Charts | Recharts |
 | AI | Anthropic Claude claude-sonnet-4-6 |
-| Backend | Netlify Functions (serverless TypeScript) |
+| Backend | Vercel Serverless Functions (TypeScript, `/api` folder) |
 | Storage | localStorage (all data stays on your device) |
-| Deployment | Netlify |
+| Deployment | Vercel (free tier) |
 
 ---
 
@@ -52,12 +52,12 @@ npm install
 npm run dev
 ```
 
-For AI features locally, install the [Netlify CLI](https://docs.netlify.com/cli/get-started/) and run:
+For AI features locally, install the [Vercel CLI](https://vercel.com/docs/cli) and run:
 ```bash
-# Create .env with your key
-echo "ANTHROPIC_API_KEY=your_key_here" > .env
+# Create .env.local with your key
+echo "ANTHROPIC_API_KEY=your_key_here" > .env.local
 
-netlify dev
+vercel dev   # serves frontend + /api functions on http://localhost:3000
 ```
 
 ### Build
@@ -67,12 +67,15 @@ npm run build
 
 ---
 
-## Netlify Deployment
+## Vercel Deployment (Free)
 
-1. **Connect repo** to [Netlify](https://app.netlify.com)
-2. **Build settings**: Command `npm run build` | Publish directory `dist`
-3. **Environment variable**: Add `ANTHROPIC_API_KEY` in Site Settings → Environment Variables
-4. **Deploy** — Netlify Functions are auto-detected from `netlify/functions/`
+1. Go to [vercel.com](https://vercel.com) → **Add New Project** → import `Sreyashi/ADHD-AgenticApp`
+2. Framework preset: **Vite** (auto-detected)
+3. Build & output settings are in `vercel.json` — no changes needed
+4. **Environment Variables** → add `ANTHROPIC_API_KEY`
+5. Click **Deploy** — the `/api` functions are auto-detected
+
+> The free Vercel Hobby plan includes 100GB bandwidth, unlimited deployments, and serverless function execution — more than enough for this app.
 
 ---
 
@@ -93,11 +96,11 @@ npm run build
 │   ├── utils/storage.ts          # localStorage helpers + export
 │   └── App.tsx                   # Root component + routing
 │
-├── netlify/functions/
-│   ├── ai-insights.ts            # Monitoring agent (Claude API)
-│   └── therapist-finder.ts       # Therapist search agent (Claude API)
+├── api/
+│   ├── ai-insights.ts            # Monitoring agent (Vercel serverless, Claude API)
+│   └── therapist-finder.ts       # Therapist search agent (Vercel serverless, Claude API)
 │
-└── netlify.toml                  # Netlify build + functions config
+└── vercel.json                   # Vercel build + routing config
 ```
 
 ---

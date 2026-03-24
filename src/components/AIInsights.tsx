@@ -71,7 +71,7 @@ export function AIInsights({ profile, logs, analysis, onAnalysisUpdated }: Props
     setError('');
 
     try {
-      const resp = await fetch('/.netlify/functions/ai-insights', {
+      const resp = await fetch('/api/ai-insights', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ profile, logs: logs.slice(0, 60) }),
@@ -89,7 +89,7 @@ export function AIInsights({ profile, logs, analysis, onAnalysisUpdated }: Props
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error';
       setError(msg.includes('Failed to fetch')
-        ? 'Cannot connect to AI service. Make sure ANTHROPIC_API_KEY is set in Netlify environment variables.'
+        ? 'Cannot connect to AI service. Make sure ANTHROPIC_API_KEY is set in Vercel environment variables.'
         : msg
       );
     } finally {
