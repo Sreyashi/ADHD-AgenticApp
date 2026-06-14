@@ -7,12 +7,7 @@ import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
 import { SEMRESATTRS_PROJECT_NAME } from '@arizeai/openinference-semantic-conventions';
 import { AnthropicInstrumentation } from '@arizeai/openinference-instrumentation-anthropic';
 
-// ── Arize AX Tracing ──────────────────────────────────────────────────────────
-let sdk: NodeSDK | null = null;
-
-function initTracing() {
-  if (sdk) return;
-
+function buildSDK() {
   const exporter = new OTLPTraceExporter({
     url: 'https://otlp.arize.com',
     headers: {
@@ -24,7 +19,7 @@ function initTracing() {
   const instrumentation = new AnthropicInstrumentation();
   instrumentation.manuallyInstrument(Anthropic);
 
-  sdk = new NodeSDK({
+  const sdk = new NodeSDK({
     spanProcessors: [new BatchSpanProcessor(exporter)],
     resource: resources.resourceFromAttributes({
       [ATTR_SERVICE_NAME]: 'adhd-behavior-tracker',
@@ -34,26 +29,32 @@ function initTracing() {
   });
 
   sdk.start();
-
-  // Force flush before the serverless function exits
-  process.on('beforeExit', async () => {
-    await sdk?.shutdown();
-  });
+  return sdk;
 }
-
-initTracing();
-// ─────────────────────────────────────────────────────────────────────────────
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Create a fresh SDK per request so shutdown/flush is guaranteed within
+  // the request lifetime — Vercel freezes the process after response, so
+  // beforeExit / process-level hooks never fire reliably
+  const sdk = buildSDK();
+
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method === 'OPTIONS') {
+    await sdk.shutdown();
+    return res.status(200).end();
+  }
+
+  if (req.method !== 'POST') {
+    await sdk.shutdown();
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
   if (!process.env.ANTHROPIC_API_KEY) {
+    await sdk.shutdown();
     return res.status(500).json({
       error: 'ANTHROPIC_API_KEY is not configured. Add it in Vercel → Project Settings → Environment Variables.',
     });
@@ -62,6 +63,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { profile, logs } = req.body as { profile: Record<string, unknown>; logs: Record<string, unknown>[] };
 
   if (!logs || logs.length < 3) {
+    await sdk.shutdown();
     return res.status(400).json({ error: 'At least 3 logs are required for analysis' });
   }
 
@@ -128,10 +130,14 @@ Rules:
       }
     }
 
+    // Flush all spans to Arize before returning — critical for Vercel serverless
+    await sdk.shutdown();
+
     return res.status(200).json(analysisData);
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
     console.error('AI Insights error:', msg);
+    await sdk.shutdown().catch(() => {});
     return res.status(500).json({ error: `Analysis failed: ${msg}` });
   }
 }
