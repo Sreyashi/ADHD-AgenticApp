@@ -63,8 +63,8 @@ async function sendTrace({
     method: 'POST',
     headers: {
       'Content-Type':     'application/json',
-      'x-auth-token':     apiKey,
-      'x-arize-space-id': spaceId,
+      'space_id': spaceId,
+      'api_key':  apiKey,
     },
     body: JSON.stringify(payload),
   });
