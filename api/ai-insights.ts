@@ -7,7 +7,7 @@ import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
 import { SEMRESATTRS_PROJECT_NAME } from '@arizeai/openinference-semantic-conventions';
 import { AnthropicInstrumentation } from '@arizeai/openinference-instrumentation-anthropic';
 
-// ── Arize Phoenix Tracing ─────────────────────────────────────────────────────
+// ── Arize AX Tracing ──────────────────────────────────────────────────────────
 let tracingInitialised = false;
 
 function initTracing() {
@@ -21,9 +21,10 @@ function initTracing() {
     spanProcessors: [
       new SimpleSpanProcessor(
         new OTLPTraceExporter({
-          url: process.env.PHOENIX_COLLECTOR_ENDPOINT ?? 'https://app.phoenix.arize.com/v1/traces',
+          url: 'https://otlp.arize.com/v1/traces',
           headers: {
-            api_key: process.env.PHOENIX_API_KEY ?? '',
+            'x-auth-token': process.env.ARIZE_API_KEY ?? '',
+            'x-arize-space-id': process.env.ARIZE_SPACE_ID ?? '',
           },
         }),
       ),
