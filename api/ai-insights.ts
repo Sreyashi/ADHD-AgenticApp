@@ -75,6 +75,12 @@ async function sendTrace({
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // DIAGNOSTIC — remove after confirming traces work
+  console.log('[DIAG] Handler called. ENV CHECK:',
+    'ARIZE_API_KEY:', process.env.ARIZE_API_KEY ? 'SET('+process.env.ARIZE_API_KEY.length+'chars)' : 'MISSING',
+    'ARIZE_SPACE_ID:', process.env.ARIZE_SPACE_ID ? 'SET('+process.env.ARIZE_SPACE_ID.length+'chars)' : 'MISSING',
+    'ANTHROPIC_API_KEY:', process.env.ANTHROPIC_API_KEY ? 'SET' : 'MISSING',
+  );
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
