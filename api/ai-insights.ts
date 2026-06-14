@@ -1,38 +1,74 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Anthropic from '@anthropic-ai/sdk';
-import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
-import { Resource } from '@opentelemetry/resources';
-import { BasicTracerProvider, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
-import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
-import { SEMRESATTRS_PROJECT_NAME } from '@arizeai/openinference-semantic-conventions';
-import { AnthropicInstrumentation } from '@arizeai/openinference-instrumentation-anthropic';
 
-// ── Arize AX Tracing ──────────────────────────────────────────────────────────
-// SimpleSpanProcessor sends spans immediately — correct for serverless
-// BatchSpanProcessor.forceFlush() fails in ESM/Vercel Fluid environments
-function createProvider() {
-  const exporter = new OTLPTraceExporter({
-    url: 'https://otlp.arize.com/v1/traces',
-    headers: {
-      'x-auth-token': process.env.ARIZE_API_KEY ?? '',
-      'x-arize-space-id': process.env.ARIZE_SPACE_ID ?? '',
-    },
-  });
+// ── Arize AX Tracing — zero OTel dependencies, plain fetch ───────────────────
+function randomHex(bytes: number) {
+  return Array.from(crypto.getRandomValues(new Uint8Array(bytes)))
+    .map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
-  const provider = new BasicTracerProvider({
-    resource: new Resource({
-      [ATTR_SERVICE_NAME]: 'adhd-behavior-tracker',
-      [SEMRESATTRS_PROJECT_NAME]: 'adhd-behavior-tracker',
-    }),
-    spanProcessors: [new SimpleSpanProcessor(exporter)],
-  });
+async function sendTrace({
+  model, inputTokens, outputTokens, prompt, response, durationMs,
+}: {
+  model: string; inputTokens: number; outputTokens: number;
+  prompt: string; response: string; durationMs: number;
+}) {
+  const apiKey = process.env.ARIZE_API_KEY;
+  const spaceId = process.env.ARIZE_SPACE_ID;
+  if (!apiKey || !spaceId) {
+    console.log('[Arize] Skipping trace — ARIZE_API_KEY or ARIZE_SPACE_ID not set');
+    return;
+  }
 
-  const instrumentation = new AnthropicInstrumentation();
-  instrumentation.manuallyInstrument(Anthropic);
-  instrumentation.setTracerProvider(provider);
-  provider.register();
+  const endNs = BigInt(Date.now()) * 1_000_000n;
+  const startNs = endNs - BigInt(durationMs) * 1_000_000n;
 
-  return provider;
+  const payload = {
+    resourceSpans: [{
+      resource: {
+        attributes: [
+          { key: 'service.name',                value: { stringValue: 'adhd-behavior-tracker' } },
+          { key: 'openinference.project.name',  value: { stringValue: 'adhd-behavior-tracker' } },
+        ],
+      },
+      scopeSpans: [{
+        scope: { name: 'adhd-tracker', version: '1.0.0' },
+        spans: [{
+          traceId:            randomHex(16),
+          spanId:             randomHex(8),
+          name:               'anthropic.messages.create',
+          kind:               3, // CLIENT
+          startTimeUnixNano:  String(startNs),
+          endTimeUnixNano:    String(endNs),
+          attributes: [
+            { key: 'openinference.span.kind',   value: { stringValue: 'LLM' } },
+            { key: 'llm.model_name',            value: { stringValue: model } },
+            { key: 'llm.token_count.prompt',    value: { intValue: inputTokens } },
+            { key: 'llm.token_count.completion',value: { intValue: outputTokens } },
+            { key: 'llm.token_count.total',     value: { intValue: inputTokens + outputTokens } },
+            { key: 'input.value',               value: { stringValue: prompt.slice(0, 1000) } },
+            { key: 'output.value',              value: { stringValue: response.slice(0, 1000) } },
+          ],
+          status: { code: 1 },
+        }],
+      }],
+    }],
+  };
+
+  try {
+    const res = await fetch('https://otlp.arize.com/v1/traces', {
+      method: 'POST',
+      headers: {
+        'Content-Type':     'application/json',
+        'x-auth-token':     apiKey,
+        'x-arize-space-id': spaceId,
+      },
+      body: JSON.stringify(payload),
+    });
+    console.log('[Arize] Trace sent. Status:', res.status, await res.text().catch(() => ''));
+  } catch (e) {
+    console.error('[Arize] Failed to send trace:', e);
+  }
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -50,9 +86,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       error: 'ANTHROPIC_API_KEY is not configured.',
     });
   }
-
-  console.log('[Arize] Init. ARIZE_API_KEY:', !!process.env.ARIZE_API_KEY, 'ARIZE_SPACE_ID:', !!process.env.ARIZE_SPACE_ID);
-  const provider = createProvider();
 
   const { profile, logs } = req.body as { profile: Record<string, unknown>; logs: Record<string, unknown>[] };
 
@@ -101,6 +134,8 @@ Rules:
 - improvementAreas = 3 specific therapy specializations (meaningful only if recommendChangeTherapist is true)
 - Include 3-5 insights, weeklyAverages for weeks present in data (max 8)`;
 
+  const t0 = Date.now();
+
   try {
     const response = await client.messages.create({
       model: 'claude-sonnet-4-6',
@@ -109,6 +144,7 @@ Rules:
       messages: [{ role: 'user', content: userPrompt }],
     });
 
+    const durationMs = Date.now() - t0;
     const rawText = (response.content[0] as { type: string; text: string }).text.trim();
 
     let analysisData: Record<string, unknown>;
@@ -123,15 +159,20 @@ Rules:
       }
     }
 
-    console.log('[Arize] Claude call complete. Flushing spans...');
-    await provider.forceFlush();
-    console.log('[Arize] Flush done.');
+    // Send trace to Arize (non-blocking — don't let trace failure affect the response)
+    await sendTrace({
+      model:        response.model,
+      inputTokens:  response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      prompt:       userPrompt,
+      response:     rawText,
+      durationMs,
+    });
 
     return res.status(200).json(analysisData);
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
     console.error('AI Insights error:', msg);
-    await provider.forceFlush().catch(() => {});
     return res.status(500).json({ error: `Analysis failed: ${msg}` });
   }
 }
