@@ -1,45 +1,40 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Anthropic from '@anthropic-ai/sdk';
-import { NodeSDK, resources } from '@opentelemetry/sdk-node';
-import { SimpleSpanProcessor } from '@opentelemetry/sdk-trace-node';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
+import { Resource } from '@opentelemetry/resources';
+import { BatchSpanProcessor, BasicTracerProvider } from '@opentelemetry/sdk-trace-base';
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
 import { SEMRESATTRS_PROJECT_NAME } from '@arizeai/openinference-semantic-conventions';
 import { AnthropicInstrumentation } from '@arizeai/openinference-instrumentation-anthropic';
 
 // ── Arize AX Tracing ──────────────────────────────────────────────────────────
-let tracingInitialised = false;
+// Fresh provider per invocation — required for Vercel serverless
+// (no persistent process state between cold starts)
+function createTracerProvider() {
+  const exporter = new OTLPTraceExporter({
+    url: 'https://otlp.arize.com/v1/traces',
+    headers: {
+      space_id: process.env.ARIZE_SPACE_ID ?? '',
+      api_key:  process.env.ARIZE_API_KEY ?? '',
+    },
+  });
 
-function initTracing() {
-  if (tracingInitialised) return;
-  tracingInitialised = true;
-
-  const instrumentation = new AnthropicInstrumentation();
-  instrumentation.manuallyInstrument(Anthropic);
-
-  const sdk = new NodeSDK({
-    spanProcessors: [
-      new SimpleSpanProcessor(
-        new OTLPTraceExporter({
-          url: 'https://otlp.arize.com/v1/traces',
-          headers: {
-            'x-auth-token': process.env.ARIZE_API_KEY ?? '',
-            'x-arize-space-id': process.env.ARIZE_SPACE_ID ?? '',
-          },
-        }),
-      ),
-    ],
-    resource: resources.resourceFromAttributes({
+  const provider = new BasicTracerProvider({
+    resource: new Resource({
       [ATTR_SERVICE_NAME]: 'adhd-behavior-tracker',
       [SEMRESATTRS_PROJECT_NAME]: 'adhd-behavior-tracker',
     }),
-    instrumentations: [instrumentation],
+    spanProcessors: [new BatchSpanProcessor(exporter)],
   });
 
-  sdk.start();
-}
+  const instrumentation = new AnthropicInstrumentation();
+  instrumentation.manuallyInstrument(Anthropic);
+  instrumentation.setTracerProvider(provider);
 
-initTracing();
+  provider.register();
+
+  return provider;
+}
 // ─────────────────────────────────────────────────────────────────────────────
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -56,6 +51,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       error: 'ANTHROPIC_API_KEY is not configured. Add it in Vercel → Project Settings → Environment Variables.',
     });
   }
+
+  // Init tracing per-request so spans are guaranteed to exist within this invocation
+  const tracerProvider = createTracerProvider();
 
   const { profile, logs } = req.body as { profile: Record<string, unknown>; logs: Record<string, unknown>[] };
 
@@ -126,10 +124,14 @@ Rules:
       }
     }
 
+    // Force flush before Vercel shuts down the function
+    await tracerProvider.forceFlush();
+
     return res.status(200).json(analysisData);
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
     console.error('AI Insights error:', msg);
+    await tracerProvider.forceFlush().catch(() => {});
     return res.status(500).json({ error: `Analysis failed: ${msg}` });
   }
 }
