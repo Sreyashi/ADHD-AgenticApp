@@ -1,23 +1,14 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Anthropic from '@anthropic-ai/sdk';
-import { diag, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api';
-import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
-import { registerInstrumentations } from '@opentelemetry/instrumentation';
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { Resource } from '@opentelemetry/resources';
-import { BatchSpanProcessor, NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
+import { BasicTracerProvider, BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
 import { SEMRESATTRS_PROJECT_NAME } from '@arizeai/openinference-semantic-conventions';
 import { AnthropicInstrumentation } from '@arizeai/openinference-instrumentation-anthropic';
 
 // ── Arize AX Tracing ──────────────────────────────────────────────────────────
-// Debug logging — visible in Vercel function logs
-diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.DEBUG);
-
-let tracerProvider: NodeTracerProvider | null = null;
-
-function initTracing() {
-  if (tracerProvider) return tracerProvider;
-
+function createProvider() {
   const exporter = new OTLPTraceExporter({
     url: 'https://otlp.arize.com/v1/traces',
     headers: {
@@ -26,7 +17,7 @@ function initTracing() {
     },
   });
 
-  tracerProvider = new NodeTracerProvider({
+  const provider = new BasicTracerProvider({
     resource: new Resource({
       [ATTR_SERVICE_NAME]: 'adhd-behavior-tracker',
       [SEMRESATTRS_PROJECT_NAME]: 'adhd-behavior-tracker',
@@ -34,24 +25,18 @@ function initTracing() {
     spanProcessors: [new BatchSpanProcessor(exporter)],
   });
 
-  registerInstrumentations({
-    instrumentations: [new AnthropicInstrumentation()],
-    tracerProvider,
-  });
+  const instrumentation = new AnthropicInstrumentation();
+  instrumentation.manuallyInstrument(Anthropic);
+  instrumentation.setTracerProvider(provider);
+  provider.register();
 
-  tracerProvider.register();
-
-  console.log('[Arize] Tracing initialised. ARIZE_API_KEY set:', !!process.env.ARIZE_API_KEY, '| ARIZE_SPACE_ID set:', !!process.env.ARIZE_SPACE_ID);
-
-  return tracerProvider;
+  return provider;
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const provider = initTracing();
-
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
@@ -60,9 +45,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!process.env.ANTHROPIC_API_KEY) {
     return res.status(500).json({
-      error: 'ANTHROPIC_API_KEY is not configured. Add it in Vercel → Project Settings → Environment Variables.',
+      error: 'ANTHROPIC_API_KEY is not configured.',
     });
   }
+
+  console.log('[Arize] Creating provider. Keys set — ARIZE_API_KEY:', !!process.env.ARIZE_API_KEY, 'ARIZE_SPACE_ID:', !!process.env.ARIZE_SPACE_ID);
+
+  const provider = createProvider();
 
   const { profile, logs } = req.body as { profile: Record<string, unknown>; logs: Record<string, unknown>[] };
 
@@ -133,16 +122,15 @@ Rules:
       }
     }
 
-    // Force flush spans to Arize before Vercel freezes the process
-    console.log('[Arize] Flushing spans...');
+    console.log('[Arize] Claude call done. Flushing spans to Arize...');
     await provider.forceFlush();
-    console.log('[Arize] Flush complete');
+    console.log('[Arize] Flush complete.');
 
     return res.status(200).json(analysisData);
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
     console.error('AI Insights error:', msg);
-    await provider.forceFlush().catch(() => {});
+    await provider.forceFlush().catch((e) => console.error('[Arize] Flush error:', e));
     return res.status(500).json({ error: `Analysis failed: ${msg}` });
   }
 }
