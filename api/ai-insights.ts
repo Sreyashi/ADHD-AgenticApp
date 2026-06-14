@@ -2,12 +2,14 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Anthropic from '@anthropic-ai/sdk';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { Resource } from '@opentelemetry/resources';
-import { BasicTracerProvider, BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
+import { BasicTracerProvider, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
 import { SEMRESATTRS_PROJECT_NAME } from '@arizeai/openinference-semantic-conventions';
 import { AnthropicInstrumentation } from '@arizeai/openinference-instrumentation-anthropic';
 
 // ── Arize AX Tracing ──────────────────────────────────────────────────────────
+// SimpleSpanProcessor sends spans immediately — correct for serverless
+// BatchSpanProcessor.forceFlush() fails in ESM/Vercel Fluid environments
 function createProvider() {
   const exporter = new OTLPTraceExporter({
     url: 'https://otlp.arize.com/v1/traces',
@@ -22,7 +24,7 @@ function createProvider() {
       [ATTR_SERVICE_NAME]: 'adhd-behavior-tracker',
       [SEMRESATTRS_PROJECT_NAME]: 'adhd-behavior-tracker',
     }),
-    spanProcessors: [new BatchSpanProcessor(exporter)],
+    spanProcessors: [new SimpleSpanProcessor(exporter)],
   });
 
   const instrumentation = new AnthropicInstrumentation();
@@ -49,8 +51,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  console.log('[Arize] Creating provider. Keys set — ARIZE_API_KEY:', !!process.env.ARIZE_API_KEY, 'ARIZE_SPACE_ID:', !!process.env.ARIZE_SPACE_ID);
-
+  console.log('[Arize] Init. ARIZE_API_KEY:', !!process.env.ARIZE_API_KEY, 'ARIZE_SPACE_ID:', !!process.env.ARIZE_SPACE_ID);
   const provider = createProvider();
 
   const { profile, logs } = req.body as { profile: Record<string, unknown>; logs: Record<string, unknown>[] };
@@ -122,15 +123,15 @@ Rules:
       }
     }
 
-    console.log('[Arize] Claude call done. Flushing spans to Arize...');
+    console.log('[Arize] Claude call complete. Flushing spans...');
     await provider.forceFlush();
-    console.log('[Arize] Flush complete.');
+    console.log('[Arize] Flush done.');
 
     return res.status(200).json(analysisData);
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
     console.error('AI Insights error:', msg);
-    await provider.forceFlush().catch((e) => console.error('[Arize] Flush error:', e));
+    await provider.forceFlush().catch(() => {});
     return res.status(500).json({ error: `Analysis failed: ${msg}` });
   }
 }
