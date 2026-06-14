@@ -1,5 +1,45 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Anthropic from '@anthropic-ai/sdk';
+import { NodeSDK, resources } from '@opentelemetry/sdk-node';
+import { SimpleSpanProcessor } from '@opentelemetry/sdk-trace-node';
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
+import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
+import { SEMRESATTRS_PROJECT_NAME } from '@arizeai/openinference-semantic-conventions';
+import { AnthropicInstrumentation } from '@arizeai/openinference-instrumentation-anthropic';
+
+// ── Arize Phoenix Tracing ─────────────────────────────────────────────────────
+let tracingInitialised = false;
+
+function initTracing() {
+  if (tracingInitialised) return;
+  tracingInitialised = true;
+
+  const instrumentation = new AnthropicInstrumentation();
+  instrumentation.manuallyInstrument(Anthropic);
+
+  const sdk = new NodeSDK({
+    spanProcessors: [
+      new SimpleSpanProcessor(
+        new OTLPTraceExporter({
+          url: process.env.PHOENIX_COLLECTOR_ENDPOINT ?? 'https://app.phoenix.arize.com/v1/traces',
+          headers: {
+            api_key: process.env.PHOENIX_API_KEY ?? '',
+          },
+        }),
+      ),
+    ],
+    resource: resources.resourceFromAttributes({
+      [ATTR_SERVICE_NAME]: 'adhd-behavior-tracker',
+      [SEMRESATTRS_PROJECT_NAME]: 'adhd-behavior-tracker',
+    }),
+    instrumentations: [instrumentation],
+  });
+
+  sdk.start();
+}
+
+initTracing();
+// ─────────────────────────────────────────────────────────────────────────────
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
