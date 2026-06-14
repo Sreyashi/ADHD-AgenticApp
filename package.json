@@ -16,12 +16,12 @@
     "react-dom": "^18.3.1",
     "recharts": "^2.12.7",
     "uuid": "^10.0.0",
-    "@arizeai/openinference-instrumentation-anthropic": "^0.5.0",
-    "@arizeai/openinference-semantic-conventions": "^0.10.0",
-    "@opentelemetry/exporter-trace-otlp-proto": "^0.52.0",
-    "@opentelemetry/sdk-node": "^0.52.0",
-    "@opentelemetry/sdk-trace-node": "^1.25.0",
-    "@opentelemetry/semantic-conventions": "^1.25.0"
+    "@arizeai/openinference-instrumentation-anthropic": "^0.1.13",
+    "@arizeai/openinference-semantic-conventions": "^2.5.0",
+    "@opentelemetry/exporter-trace-otlp-proto": "^0.219.0",
+    "@opentelemetry/sdk-node": "^0.219.0",
+    "@opentelemetry/sdk-trace-node": "^2.8.0",
+    "@opentelemetry/semantic-conventions": "^1.41.1"
   },
   "devDependencies": {
     "@vercel/node": "^5.0.0",
