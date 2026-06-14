@@ -1,60 +1,64 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Anthropic from '@anthropic-ai/sdk';
-import { NodeSDK, resources } from '@opentelemetry/sdk-node';
-import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-node';
+import { diag, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
+import { registerInstrumentations } from '@opentelemetry/instrumentation';
+import { Resource } from '@opentelemetry/resources';
+import { BatchSpanProcessor, NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
 import { SEMRESATTRS_PROJECT_NAME } from '@arizeai/openinference-semantic-conventions';
 import { AnthropicInstrumentation } from '@arizeai/openinference-instrumentation-anthropic';
 
-function buildSDK() {
+// ── Arize AX Tracing ──────────────────────────────────────────────────────────
+// Debug logging — visible in Vercel function logs
+diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.DEBUG);
+
+let tracerProvider: NodeTracerProvider | null = null;
+
+function initTracing() {
+  if (tracerProvider) return tracerProvider;
+
   const exporter = new OTLPTraceExporter({
-    url: 'https://otlp.arize.com',
+    url: 'https://otlp.arize.com/v1/traces',
     headers: {
       'x-auth-token': process.env.ARIZE_API_KEY ?? '',
       'x-arize-space-id': process.env.ARIZE_SPACE_ID ?? '',
     },
   });
 
-  const instrumentation = new AnthropicInstrumentation();
-  instrumentation.manuallyInstrument(Anthropic);
-
-  const sdk = new NodeSDK({
-    spanProcessors: [new BatchSpanProcessor(exporter)],
-    resource: resources.resourceFromAttributes({
+  tracerProvider = new NodeTracerProvider({
+    resource: new Resource({
       [ATTR_SERVICE_NAME]: 'adhd-behavior-tracker',
       [SEMRESATTRS_PROJECT_NAME]: 'adhd-behavior-tracker',
     }),
-    instrumentations: [instrumentation],
+    spanProcessors: [new BatchSpanProcessor(exporter)],
   });
 
-  sdk.start();
-  return sdk;
+  registerInstrumentations({
+    instrumentations: [new AnthropicInstrumentation()],
+    tracerProvider,
+  });
+
+  tracerProvider.register();
+
+  console.log('[Arize] Tracing initialised. ARIZE_API_KEY set:', !!process.env.ARIZE_API_KEY, '| ARIZE_SPACE_ID set:', !!process.env.ARIZE_SPACE_ID);
+
+  return tracerProvider;
 }
+// ─────────────────────────────────────────────────────────────────────────────
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Create a fresh SDK per request so shutdown/flush is guaranteed within
-  // the request lifetime — Vercel freezes the process after response, so
-  // beforeExit / process-level hooks never fire reliably
-  const sdk = buildSDK();
+  const provider = initTracing();
 
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (req.method === 'OPTIONS') {
-    await sdk.shutdown();
-    return res.status(200).end();
-  }
-
-  if (req.method !== 'POST') {
-    await sdk.shutdown();
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   if (!process.env.ANTHROPIC_API_KEY) {
-    await sdk.shutdown();
     return res.status(500).json({
       error: 'ANTHROPIC_API_KEY is not configured. Add it in Vercel → Project Settings → Environment Variables.',
     });
@@ -63,7 +67,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { profile, logs } = req.body as { profile: Record<string, unknown>; logs: Record<string, unknown>[] };
 
   if (!logs || logs.length < 3) {
-    await sdk.shutdown();
     return res.status(400).json({ error: 'At least 3 logs are required for analysis' });
   }
 
@@ -130,14 +133,16 @@ Rules:
       }
     }
 
-    // Flush all spans to Arize before returning — critical for Vercel serverless
-    await sdk.shutdown();
+    // Force flush spans to Arize before Vercel freezes the process
+    console.log('[Arize] Flushing spans...');
+    await provider.forceFlush();
+    console.log('[Arize] Flush complete');
 
     return res.status(200).json(analysisData);
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
     console.error('AI Insights error:', msg);
-    await sdk.shutdown().catch(() => {});
+    await provider.forceFlush().catch(() => {});
     return res.status(500).json({ error: `Analysis failed: ${msg}` });
   }
 }
