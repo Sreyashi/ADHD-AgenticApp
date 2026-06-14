@@ -15,8 +15,11 @@ async function sendTrace({
 }) {
   const apiKey = process.env.ARIZE_API_KEY;
   const spaceId = process.env.ARIZE_SPACE_ID;
+
+  console.log('[Arize] sendTrace called. apiKey:', !!apiKey, 'spaceId:', !!spaceId);
+
   if (!apiKey || !spaceId) {
-    console.log('[Arize] Skipping trace — ARIZE_API_KEY or ARIZE_SPACE_ID not set');
+    console.log('[Arize] Skipping — keys missing');
     return;
   }
 
@@ -27,27 +30,27 @@ async function sendTrace({
     resourceSpans: [{
       resource: {
         attributes: [
-          { key: 'service.name',                value: { stringValue: 'adhd-behavior-tracker' } },
-          { key: 'openinference.project.name',  value: { stringValue: 'adhd-behavior-tracker' } },
+          { key: 'service.name',               value: { stringValue: 'adhd-behavior-tracker' } },
+          { key: 'openinference.project.name', value: { stringValue: 'adhd-behavior-tracker' } },
         ],
       },
       scopeSpans: [{
         scope: { name: 'adhd-tracker', version: '1.0.0' },
         spans: [{
-          traceId:            randomHex(16),
-          spanId:             randomHex(8),
-          name:               'anthropic.messages.create',
-          kind:               3, // CLIENT
-          startTimeUnixNano:  String(startNs),
-          endTimeUnixNano:    String(endNs),
+          traceId:           randomHex(16),
+          spanId:            randomHex(8),
+          name:              'anthropic.messages.create',
+          kind:              3,
+          startTimeUnixNano: String(startNs),
+          endTimeUnixNano:   String(endNs),
           attributes: [
-            { key: 'openinference.span.kind',   value: { stringValue: 'LLM' } },
-            { key: 'llm.model_name',            value: { stringValue: model } },
-            { key: 'llm.token_count.prompt',    value: { intValue: inputTokens } },
-            { key: 'llm.token_count.completion',value: { intValue: outputTokens } },
-            { key: 'llm.token_count.total',     value: { intValue: inputTokens + outputTokens } },
-            { key: 'input.value',               value: { stringValue: prompt.slice(0, 1000) } },
-            { key: 'output.value',              value: { stringValue: response.slice(0, 1000) } },
+            { key: 'openinference.span.kind',    value: { stringValue: 'LLM' } },
+            { key: 'llm.model_name',             value: { stringValue: model } },
+            { key: 'llm.token_count.prompt',     value: { intValue: inputTokens } },
+            { key: 'llm.token_count.completion', value: { intValue: outputTokens } },
+            { key: 'llm.token_count.total',      value: { intValue: inputTokens + outputTokens } },
+            { key: 'input.value',                value: { stringValue: prompt.slice(0, 1000) } },
+            { key: 'output.value',               value: { stringValue: response.slice(0, 1000) } },
           ],
           status: { code: 1 },
         }],
@@ -55,32 +58,26 @@ async function sendTrace({
     }],
   };
 
-  try {
-    const res = await fetch('https://otlp.arize.com/v1/traces', {
-      method: 'POST',
-      headers: {
-        'Content-Type':     'application/json',
-        'x-auth-token':     apiKey,
-        'x-arize-space-id': spaceId,
-      },
-      body: JSON.stringify(payload),
-    });
-    console.log('[Arize] Trace sent. Status:', res.status, await res.text().catch(() => ''));
-  } catch (e) {
-    console.error('[Arize] Failed to send trace:', e);
-  }
+  console.log('[Arize] Sending fetch to otlp.arize.com...');
+  const r = await fetch('https://otlp.arize.com/v1/traces', {
+    method: 'POST',
+    headers: {
+      'Content-Type':     'application/json',
+      'x-auth-token':     apiKey,
+      'x-arize-space-id': spaceId,
+    },
+    body: JSON.stringify(payload),
+  });
+  const body = await r.text().catch(() => '');
+  console.log('[Arize] Response:', r.status, body);
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // DIAGNOSTIC — remove after confirming traces work
-  console.log('[DIAG] Handler called. ENV CHECK:',
-    'ARIZE_API_KEY:', process.env.ARIZE_API_KEY ? 'SET('+process.env.ARIZE_API_KEY.length+'chars)' : 'MISSING',
-    'ARIZE_SPACE_ID:', process.env.ARIZE_SPACE_ID ? 'SET('+process.env.ARIZE_SPACE_ID.length+'chars)' : 'MISSING',
-    'ANTHROPIC_API_KEY:', process.env.ANTHROPIC_API_KEY ? 'SET' : 'MISSING',
-  );
+  console.log('[DIAG] Handler called. ARIZE_API_KEY:', !!process.env.ARIZE_API_KEY, 'ARIZE_SPACE_ID:', !!process.env.ARIZE_SPACE_ID);
+
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
@@ -88,9 +85,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   if (!process.env.ANTHROPIC_API_KEY) {
-    return res.status(500).json({
-      error: 'ANTHROPIC_API_KEY is not configured.',
-    });
+    return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured.' });
   }
 
   const { profile, logs } = req.body as { profile: Record<string, unknown>; logs: Record<string, unknown>[] };
@@ -141,44 +136,51 @@ Rules:
 - Include 3-5 insights, weeklyAverages for weeks present in data (max 8)`;
 
   const t0 = Date.now();
+  let claudeResponse: Anthropic.Message | null = null;
+  let rawText = '';
 
   try {
-    const response = await client.messages.create({
+    claudeResponse = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 2000,
       system: systemPrompt,
       messages: [{ role: 'user', content: userPrompt }],
     });
-
-    const durationMs = Date.now() - t0;
-    const rawText = (response.content[0] as { type: string; text: string }).text.trim();
-
-    let analysisData: Record<string, unknown>;
-    try {
-      analysisData = JSON.parse(rawText);
-    } catch {
-      const match = rawText.match(/```(?:json)?\s*([\s\S]+?)\s*```/);
-      if (match) {
-        analysisData = JSON.parse(match[1]);
-      } else {
-        throw new Error('Failed to parse AI response as JSON');
-      }
-    }
-
-    // Send trace to Arize (non-blocking — don't let trace failure affect the response)
-    await sendTrace({
-      model:        response.model,
-      inputTokens:  response.usage.input_tokens,
-      outputTokens: response.usage.output_tokens,
-      prompt:       userPrompt,
-      response:     rawText,
-      durationMs,
-    });
-
-    return res.status(200).json(analysisData);
+    rawText = (claudeResponse.content[0] as { type: string; text: string }).text.trim();
+    console.log('[DIAG] Claude responded. tokens:', claudeResponse.usage.input_tokens, '+', claudeResponse.usage.output_tokens);
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
-    console.error('AI Insights error:', msg);
+    console.error('[DIAG] Claude call failed:', msg);
     return res.status(500).json({ error: `Analysis failed: ${msg}` });
   }
+
+  // Always send trace — even if JSON parsing fails below
+  const durationMs = Date.now() - t0;
+  sendTrace({
+    model:        claudeResponse.model,
+    inputTokens:  claudeResponse.usage.input_tokens,
+    outputTokens: claudeResponse.usage.output_tokens,
+    prompt:       userPrompt,
+    response:     rawText,
+    durationMs,
+  }).catch(e => console.error('[Arize] sendTrace threw:', e));
+
+  // Parse Claude's JSON response
+  let analysisData: Record<string, unknown>;
+  try {
+    analysisData = JSON.parse(rawText);
+  } catch {
+    const match = rawText.match(/```(?:json)?\s*([\s\S]+?)\s*```/);
+    if (match) {
+      try { analysisData = JSON.parse(match[1]); }
+      catch { return res.status(500).json({ error: 'Failed to parse AI response as JSON' }); }
+    } else {
+      return res.status(500).json({ error: 'Failed to parse AI response as JSON' });
+    }
+  }
+
+  // Wait briefly for trace to flush before response closes the connection
+  await new Promise(r => setTimeout(r, 500));
+
+  return res.status(200).json(analysisData);
 }
