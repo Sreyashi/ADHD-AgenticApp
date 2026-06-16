@@ -30,7 +30,9 @@ Also powered by Claude claude-sonnet-4-6:
 ---
 ## Core Metrics 
 Number of activities logged
+
 Accuracy of AI Analyser per entered logs
+
 ## Tech Stack
 
 | Layer | Tech |
@@ -42,37 +44,7 @@ Accuracy of AI Analyser per entered logs
 | Backend | Vercel Serverless Functions (TypeScript, `/api` folder) |
 | Storage | localStorage (all data stays on your device) |
 | Deployment | Vercel (free tier) |
-
----
-
-## Getting Started
-
-### Prerequisites
-- Node.js 18+
-- An [Anthropic API key](https://console.anthropic.com)
-
-### Local Development
-```bash
-npm install
-npm run dev
-```
-
-For AI features locally, install the [Vercel CLI](https://vercel.com/docs/cli) and run:
-```bash
-# Create .env.local with your key
-echo "ANTHROPIC_API_KEY=your_key_here" > .env.local
-
-
-
-## Vercel Deployment (Free)
-
-1. Go to [vercel.com](https://vercel.com) → **Add New Project** → import `Sreyashi/ADHD-AgenticApp`
-2. Framework preset: **Vite** (auto-detected)
-3. Build & output settings are in `vercel.json` — no changes needed
-4. **Environment Variables** → add `ANTHROPIC_API_KEY`
-5. Click **Deploy** — the `/api` functions are auto-detected
-
-> The free Vercel Hobby plan includes 100GB bandwidth, unlimited deployments, and serverless function execution — more than enough for this app.
+| AI Evals - Arize AX
 
 ---
 
