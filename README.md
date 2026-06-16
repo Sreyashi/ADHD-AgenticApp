@@ -30,8 +30,12 @@ Also powered by Claude claude-sonnet-4-6:
 ---
 ## Core Metrics 
 Number of activities logged
+Number of session analysed
 
-Accuracy of AI Analyser per entered logs
+## Model Accuracy
+
+
+##AI Evals
 
 ## Tech Stack
 
