@@ -2,7 +2,10 @@
 
 > AI-powered daily behavior tracking app for parents of children with ADHD — built to support therapists and families with data-driven insights.
 
----
+What are the problems we are solving?
+Parents do not have any tracker where they can digitally record the changes in behaviors of the kid
+Parents do no have any ways to track the improvements or decline in kids behavioral changes
+Lack of week by week or year by year comparable data to measure the effectiveness of the therapy the kid is taking.
 
 ## Features
 
@@ -25,7 +28,9 @@ Also powered by Claude claude-sonnet-4-6:
 - Curated links to real directories: Psychology Today, CHADD, TherapyDen, Zocdoc
 
 ---
-
+## Core Metrics 
+Number of activities logged
+Accuracy of AI Analyser per entered logs
 ## Tech Stack
 
 | Layer | Tech |
@@ -57,15 +62,7 @@ For AI features locally, install the [Vercel CLI](https://vercel.com/docs/cli) a
 # Create .env.local with your key
 echo "ANTHROPIC_API_KEY=your_key_here" > .env.local
 
-vercel dev   # serves frontend + /api functions on http://localhost:3000
-```
 
-### Build
-```bash
-npm run build
-```
-
----
 
 ## Vercel Deployment (Free)
 
