@@ -49,7 +49,7 @@ Number of session analysed
 | Backend | Vercel Serverless Functions (TypeScript, `/api` folder) |
 | Storage | localStorage (all data stays on your device) |
 | Deployment | Vercel (free tier) |
-| AI Evals - Arize AX
+| AI Evals - Arize AX | Model measurement
 
 ---
 
