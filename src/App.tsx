@@ -49,7 +49,12 @@ export default function App() {
   }, [profile]);
 
   if (!profile) {
-    return <SetupProfile onComplete={p => { setProfile(p); setCurrentView('dashboard'); }} />;
+    return (
+      <>
+        <SetupProfile onComplete={p => { setProfile(p); setCurrentView('dashboard'); }} />
+        <Analytics />
+      </>
+    );
   }
 
   const handleReset = () => {
