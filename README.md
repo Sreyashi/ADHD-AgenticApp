@@ -19,7 +19,6 @@
   - [Step 5: Find a Therapist with the AI Finder Agent](#step-5-find-a-therapist-with-the-ai-finder-agent)
   - [Step 6: Share a Report with Your Therapist](#step-6-share-a-report-with-your-therapist)
 - [How to Run It](#how-to-run-it)
-- [Prompt Reference](#prompt-reference)
 - [Privacy](#privacy)
 - [License](#license)
 
@@ -160,53 +159,64 @@ ADHD-AgenticApp/
 
 ### Step 1: Set Up Your Child's Profile
 
-**Why:** The AI agents need context (age, diagnosis, current therapist, therapy start date) to give relevant analysis — without it, insights would be generic.
+**Why this feature exists:** Every other feature in the app — especially the two AI agents — needs context to be useful. Without knowing the child's age, diagnosis, and therapy history, any AI-generated insight would be generic and unhelpful.
 
-**How:** On first load, `App.tsx` checks `getProfile()`; if there's no saved profile it renders `SetupProfile.tsx`, a form for name, age, diagnosis, therapist contact info, therapy start date, location, medications, and notes.
+**No AI call here.** This step is a plain form (name, age, diagnosis, current therapist, therapy start date, location, medications, notes). It just collects the context that later gets handed to the AI agents.
 
-**Output:** A `ChildProfile` object is written to `localStorage` under `adhd_tracker_profile`, and the app moves to the Dashboard.
+**Outcome:** The profile is saved, and it's automatically included in every future AI prompt so insights are personalized rather than generic.
 
 ### Step 2: Log a Behavior Event
 
-**Why:** This is the core data the rest of the app runs on — without enough logs (minimum 3), the AI monitoring agent won't have anything to analyze.
+**Why this feature exists:** This is the raw data everything else depends on. A parent records one incident at a time — what triggered it, what behavior showed up, how severe the meltdown was, focus and mood levels, how long it lasted, and what helped.
 
-**How:** Open the **Log** view (`BehaviorLogger.tsx`). Pick from predefined triggers/behaviors (`src/types/index.ts`), set meltdown/focus/mood levels (1–5 scales), duration, location, and what resolution strategy worked. Saving calls `saveLog()`, which prepends the entry to the array stored under `adhd_tracker_logs`.
+**No AI call here either** — logging needs to be fast (under a minute) and reliable, so it's a simple structured form, not an AI conversation. The AI agents only get involved once there's enough data to analyze.
 
-**Output:** A new `BehaviorLog` entry appears immediately on the Dashboard and in History.
+**Outcome:** One more data point added to the child's history. The monitoring agent needs at least 3 logged entries before it has enough to say anything meaningful.
 
 ### Step 3: Review History & Trends
 
-**Why:** Spotting patterns by eye (e.g. "meltdowns spike after screen time") is the first, fastest signal — before even running the AI agent.
+**Why this feature exists:** Before asking AI for an opinion, a parent should be able to eyeball the data themselves — e.g. "meltdowns spike after screen time" is often visible at a glance.
 
-**How:** The **History** view (`HistoryView.tsx`) filters logs by 7/14/30/90-day windows and renders Recharts `AreaChart`/`BarChart` views of meltdown severity, focus, and mood over time, plus a filterable list of raw entries.
+**No AI call here.** This is just charts and filtering (7/14/30/90-day windows) over the logs already collected. It's the "free, instant" insight layer before the AI agent is invoked.
 
-**Output:** Visual trend charts and a searchable log list — no AI call required for this step.
+**Outcome:** Visual trend lines for meltdown severity, focus, and mood — lets a parent decide *when* it's worth running the AI analysis below.
 
 ### Step 4: Run the AI Monitoring Agent
 
-**Why:** This is the agent that does what a parent can't easily do by hand: aggregate weeks of logs, compute trend direction, and flag when therapy doesn't seem to be working.
+**Why this feature exists:** This is the core "agentic" feature — automating the kind of pattern-spotting a parent or therapist would otherwise have to do manually across weeks of notes, and proactively recommending a therapy change when the data says it isn't working.
 
-**How:** From the **Insights** view (`AIInsights.tsx`), tap "Run Analysis." This POSTs the profile and up to the 60 most recent logs to `/api/ai-insights`. The serverless function builds a prompt (see [Prompt Reference](#prompt-reference)) and calls Claude with `max_tokens: 2000`.
+**What prompt runs, and why it's worded that way:**
+The agent is given the child's profile plus up to 60 recent behavior logs, and asked to return a strict JSON object — never a sentence response — so the app can render it reliably without lots of post-processing.
 
-**Output:** An `AIAnalysis` object: top triggers, trend (`improving`/`stable`/`declining`), weekly averages, 3–5 categorized insights (pattern/warning/success/recommendation) with action items, and — if 4+ weeks show no improvement — `recommendChangeTherapist: true` plus 3 concrete improvement areas to search for next.
+> *"You are an expert AI assistant specializing in ADHD behavior analysis for parents and therapists. Analyze behavior logs, identify patterns, track therapy progress, and provide actionable insights. Be empathetic, data-driven, and practical."*
 
-**Tip:** The analysis is cached via `saveAnalysis()`, so it persists across reloads until you run a fresh analysis.
+The prompt then sets explicit decision rules, instead of leaving judgment calls to the model's discretion — this is the most important design choice in the whole app, because it's the difference between an AI that's "encouraging" and one that's trustworthy enough to act on:
+- Trend is only called `"improving"` if meltdowns are decreasing *and* focus is increasing — not just a vibe.
+- Trend is only called `"declining"` if things have worsened for 3+ straight weeks — a single bad week isn't enough to alarm a parent.
+- A therapist-change is only recommended after **4+ weeks of flat or no improvement** — this guards against suggesting parents abandon a therapist over normal week-to-week noise.
+- When a change *is* recommended, the agent must name 3 concrete specialty areas to look for next (e.g. "sensory integration experience") — not just "find someone better," which wouldn't be actionable for a parent.
+
+**Outcome:** A structured report — top triggers, the trend call, week-by-week averages, 3-5 plain-language insights, and (if warranted) a therapist-change flag with specific things to search for next. It's saved so it persists until the parent runs a fresh analysis.
 
 ### Step 5: Find a Therapist with the AI Finder Agent
 
-**Why:** If the monitoring agent recommends a change (or a parent just wants options), they need somewhere to start — without leaving the app to manually search directories.
+**Why this feature exists:** If Step 4 recommends a change, a parent shouldn't be left with just "go find someone better" — they need an actual starting list. This agent exists purely to remove that next-step friction.
 
-**How:** Open **Therapists** (`TherapistFinder.tsx`), enter a location (and optionally a specialty focus). This POSTs to `/api/therapist-finder`, which prompts Claude to generate 5–6 realistic therapist profiles for that area.
+**What prompt runs, and why:** The agent is given the parent's location, the child's age and diagnosis, and an optional specialty focus, then asked to return 5-6 therapist profiles as strict JSON — again, never free text, because the result needs to render as cards in the UI.
 
-**Output:** A list of `TherapistResult` cards — name, credentials, phone, email, address, telehealth availability, approaches, years of experience — plus a disclaimer to verify details on Psychology Today or CHADD before reaching out.
+> *"You are a helpful assistant that helps parents of children with ADHD find qualified therapists. You have extensive knowledge of therapist directories and ADHD treatment specialists across the US."*
+
+Because the model can generate plausible-but-unverified contact details, every response carries a built-in disclaimer telling the parent to verify the information through Psychology Today or CHADD before reaching out — this was a deliberate trust/safety call, not an oversight: the feature is meant to save a parent's search time, not to be treated as a verified directory.
+
+**Outcome:** A shortlist of therapist cards — name, credentials, phone, address, telehealth availability, specialty approach — plus the verification disclaimer.
 
 ### Step 6: Share a Report with Your Therapist
 
-**Why:** The whole point of logging is to get this data in front of the actual therapist treating the child, in a format they can act on.
+**Why this feature exists:** Logging data is only valuable if it actually reaches the therapist treating the child. This closes the loop back to the real-world problem the app set out to solve.
 
-**How:** From **Settings** or **History**, export logs as plain text via `exportLogsAsText()` in `src/utils/storage.ts`, which formats every log (date, triggers, behaviors, levels, duration, resolution, notes) into a readable report.
+**No AI call here** — this step simply formats the already-logged data (dates, triggers, behaviors, severity levels, what helped) into a clean, readable report.
 
-**Output:** A downloadable `.txt` file ready to email or hand to the therapist.
+**Outcome:** A downloadable text file the parent can email or hand to the therapist directly — no AI interpretation involved, just the raw facts laid out clearly.
 
 ## How to Run It
 
@@ -229,19 +239,6 @@ npm install -g vercel   # if you don't already have it
 | Type-check + build for production | `npm run build` |
 | Preview the production build | `npm run preview` |
 | Deploy to Vercel | `vercel --prod` (or push to a branch connected to Vercel) |
-
-## Prompt Reference
-
-**Monitoring agent system prompt** (`api/ai-insights.ts`):
-> "You are an expert AI assistant specializing in ADHD behavior analysis for parents and therapists. Analyze behavior logs, identify patterns, track therapy progress, and provide actionable insights. Be empathetic, data-driven, and practical. Always respond with valid JSON only — no markdown, no code blocks."
-
-**Monitoring agent decision rules** (embedded in the user prompt):
-- `trend = "improving"` if meltdown levels are decreasing and focus is increasing; `"declining"` if worsening for 3+ weeks; otherwise `"stable"`.
-- `recommendChangeTherapist = true` **only** if there are 4+ weeks of data showing no improvement.
-- `improvementAreas` lists 3 specific therapy specializations to search for next, meaningful only when a change is recommended.
-
-**Therapist-finder agent system prompt** (`api/therapist-finder.ts`):
-> "You are a helpful assistant that helps parents of children with ADHD find qualified therapists. You have extensive knowledge of therapist directories and ADHD treatment specialists across the US. Always respond with valid JSON only — no markdown, no code blocks."
 
 ## Privacy
 
