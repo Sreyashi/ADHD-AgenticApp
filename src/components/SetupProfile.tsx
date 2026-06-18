@@ -73,6 +73,9 @@ export function SetupProfile({ onComplete }: Props) {
           </div>
           <h1 className="text-2xl font-bold text-slate-800">ADHD Behavior Tracker</h1>
           <p className="text-slate-500 mt-1">AI-powered daily tracking for parents & therapists</p>
+          <p className="text-xs text-brand-700 bg-brand-50 border border-brand-200 rounded-xl px-4 py-2 mt-4 inline-block">
+            We do not store the confidential data. The data is stored at user browser level.
+          </p>
         </div>
 
         <div className="card shadow-md animate-fade-in">
