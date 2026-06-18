@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Analytics } from '@vercel/analytics/react';
+import { track } from '@vercel/analytics';
 import { Navigation } from './components/Navigation';
 import { SetupProfile } from './components/SetupProfile';
 import { Dashboard } from './components/Dashboard';
@@ -47,6 +48,12 @@ export default function App() {
     const interval = setInterval(checkReminder, 60 * 60 * 1000); // check hourly
     return () => clearInterval(interval);
   }, [profile]);
+
+  // Track which page each user is on, so drop-off between pages is visible in analytics
+  useEffect(() => {
+    if (!profile) return;
+    track('view_page', { page: currentView });
+  }, [profile, currentView]);
 
   if (!profile) {
     return (

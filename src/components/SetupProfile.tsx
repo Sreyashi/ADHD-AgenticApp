@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { v4 as uuid } from 'uuid';
+import { track } from '@vercel/analytics';
 import { ChildProfile } from '../types';
 import { saveProfile } from '../utils/storage';
 
@@ -24,6 +25,11 @@ export function SetupProfile({ onComplete }: Props) {
 
   const DIAGNOSES = ['ADHD - Inattentive', 'ADHD - Hyperactive', 'ADHD - Combined', 'ASD', 'Anxiety', 'ODD', 'Sensory Processing Disorder'];
 
+  // Track which onboarding step each visitor reaches, to spot where they drop off before ever seeing the app
+  useEffect(() => {
+    track('view_onboarding_step', { step });
+  }, [step]);
+
   const toggleDiagnosis = (d: string) => {
     setForm(f => ({
       ...f,
@@ -47,6 +53,7 @@ export function SetupProfile({ onComplete }: Props) {
       createdAt: new Date().toISOString(),
     };
     saveProfile(profile);
+    track('onboarding_complete');
     onComplete(profile);
   };
 
