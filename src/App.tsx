@@ -35,11 +35,21 @@ export default function App() {
       setHasReminder(shouldRemind);
 
       // Browser notification (once per 12h)
-      if (shouldRemind && hoursSinceReminder > 12 && Notification.permission === 'granted') {
-        new Notification('ADHD Tracker Reminder', {
-          body: `Don't forget to log ${profile?.name ?? "your child"}'s behaviors today!`,
-          icon: '/favicon.svg',
-        });
+      if (
+        shouldRemind &&
+        hoursSinceReminder > 12 &&
+        typeof Notification !== 'undefined' &&
+        Notification.permission === 'granted'
+      ) {
+        try {
+          new Notification('ADHD Tracker Reminder', {
+            body: `Don't forget to log ${profile?.name ?? "your child"}'s behaviors today!`,
+            icon: '/favicon.svg',
+          });
+        } catch {
+          // Some mobile browsers (e.g. Chrome for Android, in-app WebViews) don't
+          // support the Notification constructor outside a service worker context.
+        }
         setLastReminderTime();
       }
     };

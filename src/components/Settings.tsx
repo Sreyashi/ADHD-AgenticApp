@@ -13,7 +13,8 @@ export function Settings({ profile, onProfileUpdated, onReset }: Props) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ ...profile });
   const [showReset, setShowReset] = useState(false);
-  const [notifGranted, setNotifGranted] = useState(Notification.permission === 'granted');
+  const notifSupported = typeof Notification !== 'undefined';
+  const [notifGranted, setNotifGranted] = useState(notifSupported && Notification.permission === 'granted');
 
   const DIAGNOSES = ['ADHD - Inattentive', 'ADHD - Hyperactive', 'ADHD - Combined', 'ASD', 'Anxiety', 'ODD', 'Sensory Processing Disorder'];
 
@@ -43,10 +44,16 @@ export function Settings({ profile, onProfileUpdated, onReset }: Props) {
   };
 
   const requestNotifications = async () => {
+    if (!notifSupported) return;
     const perm = await Notification.requestPermission();
     if (perm === 'granted') {
       setNotifGranted(true);
-      new Notification('ADHD Tracker', { body: `Notifications enabled! We'll remind you to log ${profile.name}'s behaviors.` });
+      try {
+        new Notification('ADHD Tracker', { body: `Notifications enabled! We'll remind you to log ${profile.name}'s behaviors.` });
+      } catch {
+        // Some mobile browsers (e.g. Chrome for Android, in-app WebViews) don't
+        // support the Notification constructor outside a service worker context.
+      }
     }
   };
 
@@ -151,10 +158,12 @@ export function Settings({ profile, onProfileUpdated, onReset }: Props) {
             <Bell size={16} />
             Notifications enabled
           </div>
-        ) : (
+        ) : notifSupported ? (
           <button onClick={requestNotifications} className="btn-primary text-sm py-2">
             Enable Notifications
           </button>
+        ) : (
+          <p className="text-xs text-slate-400">Notifications aren't supported in this browser.</p>
         )}
       </div>
 
