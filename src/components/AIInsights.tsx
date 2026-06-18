@@ -58,9 +58,19 @@ function InsightCard({ insight }: { insight: InsightItem }) {
   );
 }
 
+const MIN_DAYS_FOR_USEFUL_INSIGHT = 15;
+
+function getLoggedDaySpan(logs: BehaviorLog[]): number {
+  if (logs.length === 0) return 0;
+  const times = logs.map(l => new Date(l.date).getTime());
+  const spanMs = Math.max(...times) - Math.min(...times);
+  return Math.floor(spanMs / (1000 * 60 * 60 * 24)) + 1;
+}
+
 export function AIInsights({ profile, logs, analysis, onAnalysisUpdated }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const loggedDaySpan = getLoggedDaySpan(logs);
 
   const runAnalysis = async () => {
     if (logs.length < 3) {
@@ -125,6 +135,23 @@ export function AIInsights({ profile, logs, analysis, onAnalysisUpdated }: Props
           {loading ? 'Analyzing...' : analysis ? 'Re-analyze' : 'Run Analysis'}
         </button>
       </div>
+
+      {/* Insufficient log history banner */}
+      {loggedDaySpan < MIN_DAYS_FOR_USEFUL_INSIGHT && (
+        <div className="card border-amber-200 bg-amber-50">
+          <div className="flex items-start gap-3">
+            <AlertCircle size={18} className="text-amber-500 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-sm text-amber-800 font-medium">
+                You would need 15 days of behavioral logs to get an useful insight
+              </p>
+              <p className="text-xs text-amber-600 mt-1">
+                {loggedDaySpan} of {MIN_DAYS_FOR_USEFUL_INSIGHT} days logged so far. You can still run an analysis now, but results will be more reliable with a longer history.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Error state */}
       {error && (
