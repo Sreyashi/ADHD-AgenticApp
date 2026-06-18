@@ -8,6 +8,7 @@
 - [Project Overview](#project-overview)
 - [Architecture & How It Works](#architecture--how-it-works)
 - [Metrics](#metrics)
+- [AI Observability & Evals](#ai-observability--evals)
 - [Folder Structure](#folder-structure)
 - [Prerequisites](#prerequisites)
 - [Step-by-Step Tutorial](#step-by-step-tutorial)
@@ -97,6 +98,28 @@ What we track to know whether the app and its agents are actually useful:
 
 These are tracked manually today by reviewing logged data and analysis runs.
 
+## AI Observability & Evals
+
+Every call the monitoring agent makes to Claude is traced with **Arize AX**, an LLM observability platform, so the agent's reasoning is inspectable rather than a black box.
+
+**What's captured per call** (`api/ai-insights.ts`):
+- Full prompt and response text (input/output)
+- Model name and token usage (prompt / completion / total)
+- Latency (start/end timestamps)
+- Span kind tagged `LLM`, grouped under the `adhd-behavior-tracker` project
+
+**How it works:** after each successful Claude response, the function builds an OpenTelemetry-style span and POSTs it to Arize's OTLP endpoint (`https://otlp.arize.com/v1/traces`), authenticated with `ARIZE_API_KEY` / `ARIZE_SPACE_ID` environment variables. Tracing is best-effort — if those env vars aren't set, the function skips it silently and the user-facing response is unaffected.
+
+**Evals:** beyond raw tracing, Arize is used to run **usefulness evaluations** against the monitoring agent's real outputs — checking that:
+- `trend` only reports `"declining"` when the rule (3+ weeks worsening) is actually met
+- `recommendChangeTherapist` is only `true` after 4+ weeks of no improvement, never as a false alarm
+- `topTriggers` and insights are grounded in the actual logs sent in, not fabricated
+- the agent explicitly says when it lacks data, rather than guessing
+
+Eval datasets are built from **real traces** of this app's own input/output pairs (not generic templates), so scores reflect whether the agent is doing the specific job it was prompted to do.
+
+**To set this up yourself:** add `ANTHROPIC_API_KEY`, `ARIZE_API_KEY`, and `ARIZE_SPACE_ID` as environment variables in your Vercel project (Production environment), then trigger a few analyses from the **Insights** view — traces will appear in your Arize space under the `adhd-behavior-tracker` project within a minute.
+
 ## Folder Structure
 
 ```
@@ -133,6 +156,7 @@ ADHD-AgenticApp/
 | An Anthropic API key | Both AI agents call Claude (`claude-sonnet-4-6`) |
 | Vercel account (free tier) | Hosts the static site + the two serverless functions |
 | `vercel` CLI (`npm i -g vercel`) | Lets you run `vercel dev` locally with working `/api` routes |
+| Arize AX account (free tier, optional) | Get trace visibility and evals on the monitoring agent's Claude calls |
 
 ## Step-by-Step Tutorial
 
