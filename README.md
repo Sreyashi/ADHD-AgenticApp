@@ -9,6 +9,7 @@
 - [Architecture & How It Works](#architecture--how-it-works)
 - [Metrics](#metrics)
 - [AI Observability & Evals](#ai-observability--evals)
+- [Data Storage & Roadmap](#data-storage--roadmap)
 - [Folder Structure](#folder-structure)
 - [Tools Used](#tools-used)
 - [Step-by-Step Tutorial](#step-by-step-tutorial)
@@ -118,6 +119,28 @@ Every call the monitoring agent makes to Claude is traced with **Arize AX**, an 
 Eval datasets are built from **real traces** of this app's own input/output pairs (not generic templates), so scores reflect whether the agent is doing the specific job it was prompted to do.
 
 **To set this up yourself:** add `ANTHROPIC_API_KEY`, `ARIZE_API_KEY`, and `ARIZE_SPACE_ID` as environment variables in your Vercel project (Production environment), then trigger a few analyses from the **Insights** view — traces will appear in your Arize space under the `adhd-behavior-tracker` project within a minute.
+
+## Data Storage & Roadmap
+
+**Where data lives today:** All behavior data is stored **locally in the parent's browser** using `localStorage` — there is no backend database. A child's profile, every logged behavior entry, the latest AI analysis, and reminder timestamps are each kept under their own key, all on-device.
+
+**Why this was the right call for an MVP:**
+- Zero infrastructure cost and zero setup — a parent can start logging in seconds with nothing to sign up for.
+- Strong privacy by default — nothing about a specific family sits on a server unless an AI agent is explicitly run for that one request.
+- Fast enough to validate the core idea (does logging + AI analysis actually help parents and therapists?) before investing in backend infrastructure.
+
+**Where this breaks down as usage grows:**
+- Data is tied to one browser on one device — clearing browser storage or switching devices loses everything, with no recovery.
+- No way for a therapist to see a parent's data directly; the only handoff today is the manual text export (Step 6).
+- No way to aggregate or learn across users — every family's experience is siloed, even though patterns across many children could make the AI agent smarter over time.
+
+**Planned next step — beyond ~50 users:** migrate behavior logs and profiles from `localStorage` to a proper **relational database** (e.g. Postgres, via a managed provider like Vercel Postgres or Supabase), with:
+- Lightweight parent accounts so data survives device loss and syncs across phone/desktop.
+- A read-only, shareable view a therapist can open directly, replacing the manual `.txt` export.
+- A real audit trail of AI analyses over time, instead of caching only the single latest result.
+- The same privacy posture preserved — only behavior data needed for analysis would ever be sent to Claude, regardless of where it's persisted.
+
+This migration is intentionally deferred rather than built upfront, since it adds real infrastructure cost and complexity that isn't justified until there's enough usage to need multi-device sync and therapist-facing access.
 
 ## Folder Structure
 
