@@ -4,8 +4,10 @@
 
 ## Table of Contents
 
+- [Problem Statement](#problem-statement)
 - [Project Overview](#project-overview)
 - [Architecture & How It Works](#architecture--how-it-works)
+- [Metrics](#metrics)
 - [Folder Structure](#folder-structure)
 - [Prerequisites](#prerequisites)
 - [Step-by-Step Tutorial](#step-by-step-tutorial)
@@ -19,6 +21,13 @@
 - [Prompt Reference](#prompt-reference)
 - [Privacy](#privacy)
 - [License](#license)
+
+## Problem Statement
+
+- Parents have no digital tracker to record day-to-day changes in their child's behavior — logging happens, if at all, in scattered notebooks, texts, or memory.
+- There's no easy way to tell whether a child is improving or declining over time, since nothing is recorded consistently enough to compare.
+- There's no week-by-week or month-by-month comparable data to measure whether a given therapy approach is actually working, so treatment often continues unchanged even when it isn't helping.
+- There's no fast path to get behavior data in front of the therapist between sessions — therapists make treatment decisions mostly from what's remembered and reported verbally during the appointment itself.
 
 ## Project Overview
 
@@ -72,6 +81,21 @@ AIInsights component renders insights, saves via saveAnalysis()
 - **No routing library.** Views are switched with a single `useState<View>` in `App.tsx` rather than React Router — the app only has 6 screens, so a switch statement is simpler than a router.
 - **JSON-only LLM responses.** Both prompts explicitly forbid markdown/code fences and demand an exact JSON shape, so the functions can `JSON.parse` the response directly (with a regex fallback to strip code fences if the model adds them anyway).
 - **Stateless functions.** Each Vercel function takes the full profile/logs in the request body and returns a result — no server-side session or queue, which keeps the free tier sufficient for this workload.
+
+## Metrics
+
+What we track to know whether the app and its agents are actually useful:
+
+| Metric | What it tells us |
+|---|---|
+| Activities logged | How consistently a parent is using the daily logger — the AI agents need a steady stream of entries to be useful |
+| Sessions analyzed | How often the monitoring agent is actually run against accumulated logs |
+| Trend accuracy | Whether the agent's `improving` / `stable` / `declining` call matches what the therapist independently observes |
+| Therapist-change recommendation precision | How often a `recommendChangeTherapist: true` flag corresponds to a real, therapist-confirmed lack of progress (avoiding false alarms) |
+| Therapist-finder relevance | Whether returned therapist profiles match the requested location, specialty, and age group |
+| Time-to-log | Median time a parent spends completing one behavior log entry (target: under a minute) |
+
+These are tracked manually today by reviewing logged data and analysis runs.
 
 ## Folder Structure
 
