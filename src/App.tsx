@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { Navigation } from './components/Navigation';
 import { SetupProfile } from './components/SetupProfile';
 import { Dashboard } from './components/Dashboard';
@@ -114,6 +115,7 @@ export default function App() {
           {renderView()}
         </div>
       </main>
+      <Analytics />
     </div>
   );
 }
