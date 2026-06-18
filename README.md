@@ -10,7 +10,7 @@
 - [Metrics](#metrics)
 - [AI Observability & Evals](#ai-observability--evals)
 - [Folder Structure](#folder-structure)
-- [Prerequisites](#prerequisites)
+- [Tools Used](#tools-used)
 - [Step-by-Step Tutorial](#step-by-step-tutorial)
   - [Step 1: Set Up Your Child's Profile](#step-1-set-up-your-childs-profile)
   - [Step 2: Log a Behavior Event](#step-2-log-a-behavior-event)
@@ -147,16 +147,14 @@ ADHD-AgenticApp/
 └── package.json
 ```
 
-## Prerequisites
+## Tools Used
 
-| Requirement | Why you need it |
-|---|---|
-| Node.js 18+ | Runs Vite and the build tooling |
-| npm | Installs dependencies |
-| An Anthropic API key | Both AI agents call Claude (`claude-sonnet-4-6`) |
-| Vercel account (free tier) | Hosts the static site + the two serverless functions |
-| `vercel` CLI (`npm i -g vercel`) | Lets you run `vercel dev` locally with working `/api` routes |
-| Arize AX account (free tier, optional) | Get trace visibility and evals on the monitoring agent's Claude calls |
+| Tool | Cost | Used For |
+|---|---|---|
+| Node.js & npm | Free | Running the app locally and installing dependencies |
+| Anthropic Claude API | Paid (pay-per-use) | Powers both AI agents — behavior analysis and therapist search |
+| Vercel | Free tier | Hosting the website and the two AI agent functions |
+| Arize AX | Free tier | Monitoring AI agent calls and evaluating answer quality (optional) |
 
 ## Step-by-Step Tutorial
 
