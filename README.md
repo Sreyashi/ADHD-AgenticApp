@@ -243,7 +243,23 @@ Because the model can generate plausible-but-unverified contact details, every r
 
 ## How to Run It
 
-### First-Time Setup
+### First-Time Setup — The Journey
+
+This is the actual path this app was built and shipped on — four stops, in order:
+
+1. **Open Claude → Enter Prompt**
+   Start a Claude Code session and describe the app in one prompt — what it tracks, who it's for, and the two AI agents it needs. Claude scaffolds the full React + TypeScript + Vite frontend and the two Vercel serverless agent functions (`/api/ai-insights`, `/api/therapist-finder`) in one pass.
+
+2. **Set Up Vercel**
+   Push the generated repo to GitHub, then import it into Vercel — it auto-detects the Vite framework and the `/api` functions with zero config. Add `ANTHROPIC_API_KEY` as an environment variable in the Vercel project settings, then deploy. The live app and both AI agents are now running on a real URL.
+
+3. **Go Back to Claude → Enter Prompts to Enhance the App and Add Analytics**
+   Return to Claude with follow-up prompts as real needs come up — e.g. "add Vercel Web Analytics so I can see page-by-page drop-off," "add a daily reminder notification," "fix the blank screen a user reported on Android Chrome." Each prompt becomes a focused commit pushed to the branch Vercel watches, which auto-redeploys on every push — no separate deploy step needed.
+
+4. **Go to Arize → Connect It to Vercel and Claude, Build the Trace**
+   Create a free Arize AX account and grab `ARIZE_API_KEY` and `ARIZE_SPACE_ID`. Add both as environment variables in the same Vercel project. From that point on, every call the monitoring agent makes to Claude is automatically traced into Arize — full input/output, token usage, and latency per call — and you can run usefulness evals directly against those real traces.
+
+**To follow along exactly, here are the equivalent commands:**
 
 ```bash
 git clone https://github.com/Sreyashi/ADHD-AgenticApp.git
