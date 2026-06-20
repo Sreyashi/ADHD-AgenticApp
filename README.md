@@ -269,16 +269,6 @@ echo "ANTHROPIC_API_KEY=sk-ant-..." > .env.local
 npm install -g vercel   # if you don't already have it
 ```
 
-### Daily Usage
-
-| Task | Command |
-|---|---|
-| Run the full app locally (frontend + API) | `vercel dev` |
-| Run frontend only (no AI agents) | `npm run dev` |
-| Type-check + build for production | `npm run build` |
-| Preview the production build | `npm run preview` |
-| Deploy to Vercel | `vercel --prod` (or push to a branch connected to Vercel) |
-
 ## Privacy
 
 All behavior data is stored **locally on your device** via `localStorage`. The only data sent off-device is what you explicitly submit when running an AI agent (profile + logs to `/api/ai-insights`, or location/diagnosis to `/api/therapist-finder`) — and that data goes only to the Claude API for that single request.
