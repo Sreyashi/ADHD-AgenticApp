@@ -9,21 +9,39 @@ import { HistoryView } from './components/HistoryView';
 import { AIInsights } from './components/AIInsights';
 import { TherapistFinder } from './components/TherapistFinder';
 import { Settings } from './components/Settings';
+import { ChildSelector } from './components/ChildSelector';
+import { ChildSwitcher } from './components/ChildSwitcher';
 import { ChildProfile, BehaviorLog, AIAnalysis } from './types';
-import { getProfile, getLogs, getLatestAnalysis, shouldRemindToLog, getLastReminderTime, setLastReminderTime } from './utils/storage';
+import { getProfiles, getActiveProfile, setActiveChildId, getLogs, getLatestAnalysis, shouldRemindToLog, getLastReminderTime, setLastReminderTime } from './utils/storage';
 
 type View = 'dashboard' | 'log' | 'history' | 'insights' | 'therapists' | 'settings';
 
 export default function App() {
-  const [profile, setProfile] = useState<ChildProfile | null>(() => getProfile());
+  const [profiles, setProfiles] = useState<ChildProfile[]>(() => getProfiles());
+  const [profile, setProfile] = useState<ChildProfile | null>(() => getActiveProfile());
   const [logs, setLogs] = useState<BehaviorLog[]>(() => getLogs());
   const [analysis, setAnalysis] = useState<AIAnalysis | null>(() => getLatestAnalysis());
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [hasReminder, setHasReminder] = useState(false);
+  const [showAddChild, setShowAddChild] = useState(false);
 
   const refreshLogs = useCallback(() => {
     setLogs(getLogs());
   }, []);
+
+  const selectChild = (id: string) => {
+    setActiveChildId(id);
+    setProfile(getActiveProfile());
+    setLogs(getLogs());
+    setAnalysis(getLatestAnalysis());
+    setCurrentView('dashboard');
+  };
+
+  const handleChildAdded = (p: ChildProfile) => {
+    setProfiles(getProfiles());
+    setShowAddChild(false);
+    selectChild(p.id);
+  };
 
   // Check reminder status
   useEffect(() => {
@@ -65,16 +83,35 @@ export default function App() {
     track('view_page', { page: currentView });
   }, [profile, currentView]);
 
+  if (profiles.length === 0) {
+    return (
+      <>
+        <SetupProfile onComplete={p => { setProfiles([p]); selectChild(p.id); }} />
+        <Analytics />
+      </>
+    );
+  }
+
+  if (showAddChild) {
+    return (
+      <>
+        <SetupProfile onComplete={handleChildAdded} onCancel={() => setShowAddChild(false)} />
+        <Analytics />
+      </>
+    );
+  }
+
   if (!profile) {
     return (
       <>
-        <SetupProfile onComplete={p => { setProfile(p); setCurrentView('dashboard'); }} />
+        <ChildSelector profiles={profiles} onSelect={selectChild} onAddChild={() => setShowAddChild(true)} />
         <Analytics />
       </>
     );
   }
 
   const handleReset = () => {
+    setProfiles([]);
     setProfile(null);
     setLogs([]);
     setAnalysis(null);
@@ -120,7 +157,11 @@ export default function App() {
         return (
           <Settings
             profile={profile}
-            onProfileUpdated={p => setProfile(p)}
+            profiles={profiles}
+            onProfileUpdated={p => { setProfile(p); setProfiles(getProfiles()); }}
+            onSwitchChild={selectChild}
+            onAddChild={() => setShowAddChild(true)}
+            onChildDeleted={() => { setProfiles(getProfiles()); setProfile(getActiveProfile()); setLogs(getLogs()); setAnalysis(getLatestAnalysis()); }}
             onReset={handleReset}
           />
         );
@@ -134,6 +175,14 @@ export default function App() {
       {/* Content area */}
       <main className="md:ml-56 pb-24 md:pb-8 px-4 py-6 max-w-2xl mx-auto md:mx-0 md:max-w-none md:px-8">
         <div className="max-w-2xl">
+          {profiles.length > 1 && (
+            <ChildSwitcher
+              profiles={profiles}
+              activeId={profile.id}
+              onSwitch={selectChild}
+              onAddChild={() => setShowAddChild(true)}
+            />
+          )}
           {renderView()}
         </div>
       </main>

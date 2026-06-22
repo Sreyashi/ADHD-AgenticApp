@@ -62,7 +62,7 @@ export function BehaviorLogger({ onSaved, editLog }: Props) {
   };
 
   const handleSave = () => {
-    const log: BehaviorLog = {
+    const log: Omit<BehaviorLog, 'childId'> = {
       id: editLog?.id ?? uuid(),
       date,
       time,

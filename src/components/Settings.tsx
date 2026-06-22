@@ -1,18 +1,23 @@
 import { useState } from 'react';
-import { User, Trash2, Download, Bell, AlertCircle } from 'lucide-react';
+import { User, Trash2, Download, Bell, AlertCircle, Plus, Check } from 'lucide-react';
 import { ChildProfile } from '../types';
-import { saveProfile, getLogs, exportLogsAsText } from '../utils/storage';
+import { saveProfile, deleteProfile, getLogs, exportLogsAsText } from '../utils/storage';
 
 interface Props {
   profile: ChildProfile;
+  profiles: ChildProfile[];
   onProfileUpdated: (p: ChildProfile) => void;
+  onSwitchChild: (id: string) => void;
+  onAddChild: () => void;
+  onChildDeleted: () => void;
   onReset: () => void;
 }
 
-export function Settings({ profile, onProfileUpdated, onReset }: Props) {
+export function Settings({ profile, profiles, onProfileUpdated, onSwitchChild, onAddChild, onChildDeleted, onReset }: Props) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ ...profile });
   const [showReset, setShowReset] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const notifSupported = typeof Notification !== 'undefined';
   const [notifGranted, setNotifGranted] = useState(notifSupported && Notification.permission === 'granted');
 
@@ -62,6 +67,12 @@ export function Settings({ profile, onProfileUpdated, onReset }: Props) {
     onReset();
   };
 
+  const handleDeleteChild = (id: string) => {
+    deleteProfile(id);
+    setConfirmDeleteId(null);
+    onChildDeleted();
+  };
+
   const f = (label: string, key: keyof typeof form, type = 'text', placeholder = '') => (
     <div>
       <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
@@ -78,6 +89,43 @@ export function Settings({ profile, onProfileUpdated, onReset }: Props) {
   return (
     <div className="space-y-5 animate-fade-in">
       <h2 className="text-lg font-bold text-slate-800">Settings</h2>
+
+      {/* Children */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold text-slate-800">Children</h3>
+          <button onClick={onAddChild} className="btn-ghost text-sm flex items-center gap-1">
+            <Plus size={14} />
+            Add Child
+          </button>
+        </div>
+        <div className="space-y-2">
+          {profiles.map(p => (
+            <div key={p.id} className="flex items-center justify-between border border-slate-100 rounded-xl px-3 py-2">
+              <button
+                onClick={() => onSwitchChild(p.id)}
+                className="flex items-center gap-2 text-sm text-slate-700 flex-1 text-left"
+              >
+                <span className="font-medium">{p.name}</span>
+                <span className="text-slate-400">· Age {p.age}</span>
+                {p.id === profile.id && <Check size={14} className="text-brand-600" />}
+              </button>
+              {confirmDeleteId === p.id ? (
+                <div className="flex items-center gap-2">
+                  <button onClick={() => handleDeleteChild(p.id)} className="text-xs text-red-600 font-semibold">Confirm</button>
+                  <button onClick={() => setConfirmDeleteId(null)} className="text-xs text-slate-500">Cancel</button>
+                </div>
+              ) : (
+                profiles.length > 1 && (
+                  <button onClick={() => setConfirmDeleteId(p.id)} className="text-slate-400 hover:text-red-500">
+                    <Trash2 size={14} />
+                  </button>
+                )
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
 
       {/* Profile */}
       <div className="card">

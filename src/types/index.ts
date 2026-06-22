@@ -15,6 +15,7 @@ export interface ChildProfile {
 
 export interface BehaviorLog {
   id: string;
+  childId: string;
   date: string;
   time: string;
   triggers: string[];
