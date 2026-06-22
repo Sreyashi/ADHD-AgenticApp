@@ -7,6 +7,7 @@
 - [Problem Statement](#problem-statement)
 - [Project Overview](#project-overview)
 - [Architecture & How It Works](#architecture--how-it-works)
+- [Multi-Child Support](#multi-child-support)
 - [Metrics](#metrics)
 - [AI Observability & Evals](#ai-observability--evals)
 - [Data Storage & Roadmap](#data-storage--roadmap)
@@ -41,6 +42,8 @@ This app solves that with three pieces:
 3. **An AI therapist-finder agent** — generates a shortlist of ADHD therapists (name, phone, location, specialty) so parents have a starting point when a change is recommended.
 
 Everything is logged locally on the parent's device; only the log data itself is sent to Claude when an AI agent is explicitly run.
+
+Parents with more than one child can track each of them separately — see [Multi-Child Support](#multi-child-support) below.
 
 ## Architecture & How It Works
 
@@ -83,6 +86,21 @@ AIInsights component renders insights, saves via saveAnalysis()
 - **JSON-only LLM responses.** Both prompts explicitly forbid markdown/code fences and demand an exact JSON shape, so the functions can `JSON.parse` the response directly (with a regex fallback to strip code fences if the model adds them anyway).
 - **Stateless functions.** Each Vercel function takes the full profile/logs in the request body and returns a result — no server-side session or queue, which keeps the free tier sufficient for this workload.
 
+## Multi-Child Support
+
+Parents with more than one child can track all of them in the same app, switching between kids without losing or mixing up either child's data.
+
+**How it works:**
+- All children are stored as an array of `ChildProfile`s (`adhd_tracker_profiles` in `localStorage`), with a separate pointer (`adhd_tracker_active_child_id`) tracking which one is currently active.
+- Every behavior log carries a `childId`, so logs, AI analysis, and reminder timestamps are all transparently scoped to whichever child is active — `getLogs()`, `getLatestAnalysis()`, etc. never need a child ID passed in explicitly.
+- Existing single-profile users are migrated automatically the first time the app loads after this feature shipped — their original profile and logs become the first (and initially only) entry in the new multi-child format, with no action required and no data lost.
+
+**Where it shows up in the UI:**
+- **Home** (`FamilyOverview.tsx`) is a "My Children" page listing every child with their log count, last AI insight run date, and pending follow-ups (open reminders from their latest analysis) — tapping a child switches to their dashboard. This is also the obvious entry point for adding another child (top-right "Add Child" button).
+- A **child switcher** (`ChildSwitcher.tsx`) appears above the dashboard, log, history, insights, and therapist views whenever there are 2+ children, so a parent can jump between kids mid-task without going back to Home.
+- **Settings** has a "Children" card for switching, adding, or deleting a child profile directly, independent of how many children currently exist.
+- Adding a child reuses the same onboarding form as first-time setup (`SetupProfile.tsx`), just with a "Back to My Children" exit instead of nowhere to go.
+
 ## Metrics
 
 What we track to know whether the app and its agents are actually useful:
@@ -122,7 +140,7 @@ Eval datasets are built from **real traces** of this app's own input/output pair
 
 ## Data Storage & Roadmap
 
-**Where data lives today:** All behavior data is stored **locally in the parent's browser** using `localStorage` — there is no backend database. A child's profile, every logged behavior entry, the latest AI analysis, and reminder timestamps are each kept under their own key, all on-device.
+**Where data lives today:** All behavior data is stored **locally in the parent's browser** using `localStorage` — there is no backend database. Child profiles (one parent can have several), every logged behavior entry, the latest AI analysis per child, and per-child reminder timestamps are each kept under their own key, all on-device. Logs and analysis are tagged with a `childId` and filtered to whichever child is currently active, so multiple children's data coexists in the same browser without mixing.
 
 **Why this was the right call for an MVP:**
 - Zero infrastructure cost and zero setup — a parent can start logging in seconds with nothing to sign up for.
@@ -151,13 +169,16 @@ ADHD-AgenticApp/
 │   └── therapist-finder.ts     # Therapist-finder agent — Vercel serverless function
 ├── src/
 │   ├── components/
-│   │   ├── SetupProfile.tsx    # First-run onboarding (child profile form)
-│   │   ├── Dashboard.tsx       # Overview, recent logs, quick stats
+│   │   ├── SetupProfile.tsx    # First-run onboarding + "add another child" form
+│   │   ├── FamilyOverview.tsx  # Home: lists all children, logs/insights/follow-ups per child
+│   │   ├── ChildSelector.tsx   # Full-screen picker shown when no child is active yet
+│   │   ├── ChildSwitcher.tsx   # Inline dropdown to switch active child (2+ children)
+│   │   ├── Dashboard.tsx       # Active child's overview, recent logs, quick stats
 │   │   ├── BehaviorLogger.tsx  # Step-by-step log entry form
 │   │   ├── HistoryView.tsx     # Recharts trend charts + full log list
 │   │   ├── AIInsights.tsx      # Calls the monitoring agent, renders insights
 │   │   ├── TherapistFinder.tsx # Calls the therapist-finder agent
-│   │   ├── Settings.tsx        # Profile editing, export, reset
+│   │   ├── Settings.tsx        # Profile editing, children management, export, reset
 │   │   └── Navigation.tsx      # Responsive nav (sidebar on desktop, tabs on mobile)
 │   ├── types/
 │   │   └── index.ts            # ChildProfile, BehaviorLog, AIAnalysis types + predefined option lists
