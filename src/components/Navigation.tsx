@@ -1,6 +1,6 @@
 import { Home, PlusCircle, BarChart2, Brain, Search, Settings, type LucideIcon } from 'lucide-react';
 
-type View = 'dashboard' | 'log' | 'history' | 'insights' | 'therapists' | 'settings';
+type View = 'overview' | 'dashboard' | 'log' | 'history' | 'insights' | 'therapists' | 'settings';
 
 interface Props {
   current: View;
@@ -9,7 +9,7 @@ interface Props {
 }
 
 const NAV_ITEMS: { id: View; icon: LucideIcon; label: string }[] = [
-  { id: 'dashboard', icon: Home, label: 'Home' },
+  { id: 'overview', icon: Home, label: 'Home' },
   { id: 'log', icon: PlusCircle, label: 'Log' },
   { id: 'history', icon: BarChart2, label: 'History' },
   { id: 'insights', icon: Brain, label: 'AI Insights' },

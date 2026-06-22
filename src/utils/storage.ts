@@ -129,6 +129,27 @@ export function getLogsForRange(days: number): BehaviorLog[] {
   return getLogs().filter(l => new Date(l.date) >= cutoff);
 }
 
+// Per-child summaries — used by the family overview, independent of which child is active
+export function getLogCountForChild(childId: string): number {
+  return getAllLogsRaw().filter(l => l.childId === childId).length;
+}
+
+export function getLastLogDateForChild(childId: string): Date | null {
+  const logs = getAllLogsRaw().filter(l => l.childId === childId);
+  if (logs.length === 0) return null;
+  return new Date(logs[0].date);
+}
+
+export function getAnalysisForChild(childId: string): AIAnalysis | null {
+  try {
+    const raw = localStorage.getItem(KEYS.ANALYSIS);
+    const map = raw ? JSON.parse(raw) : {};
+    return map[childId] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // AI Analysis — scoped per child
 export function getLatestAnalysis(): AIAnalysis | null {
   const childId = getActiveChildId();

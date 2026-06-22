@@ -11,17 +11,18 @@ import { TherapistFinder } from './components/TherapistFinder';
 import { Settings } from './components/Settings';
 import { ChildSelector } from './components/ChildSelector';
 import { ChildSwitcher } from './components/ChildSwitcher';
+import { FamilyOverview } from './components/FamilyOverview';
 import { ChildProfile, BehaviorLog, AIAnalysis } from './types';
 import { getProfiles, getActiveProfile, setActiveChildId, getLogs, getLatestAnalysis, shouldRemindToLog, getLastReminderTime, setLastReminderTime } from './utils/storage';
 
-type View = 'dashboard' | 'log' | 'history' | 'insights' | 'therapists' | 'settings';
+type View = 'overview' | 'dashboard' | 'log' | 'history' | 'insights' | 'therapists' | 'settings';
 
 export default function App() {
   const [profiles, setProfiles] = useState<ChildProfile[]>(() => getProfiles());
   const [profile, setProfile] = useState<ChildProfile | null>(() => getActiveProfile());
   const [logs, setLogs] = useState<BehaviorLog[]>(() => getLogs());
   const [analysis, setAnalysis] = useState<AIAnalysis | null>(() => getLatestAnalysis());
-  const [currentView, setCurrentView] = useState<View>('dashboard');
+  const [currentView, setCurrentView] = useState<View>('overview');
   const [hasReminder, setHasReminder] = useState(false);
   const [showAddChild, setShowAddChild] = useState(false);
 
@@ -119,6 +120,15 @@ export default function App() {
 
   const renderView = () => {
     switch (currentView) {
+      case 'overview':
+        return (
+          <FamilyOverview
+            profiles={profiles}
+            activeId={profile.id}
+            onSelectChild={selectChild}
+            onAddChild={() => setShowAddChild(true)}
+          />
+        );
       case 'dashboard':
         return (
           <Dashboard
@@ -175,7 +185,7 @@ export default function App() {
       {/* Content area */}
       <main className="md:ml-56 pb-24 md:pb-8 px-4 py-6 max-w-2xl mx-auto md:mx-0 md:max-w-none md:px-8">
         <div className="max-w-2xl">
-          {profiles.length > 1 && (
+          {profiles.length > 1 && currentView !== 'overview' && (
             <ChildSwitcher
               profiles={profiles}
               activeId={profile.id}
