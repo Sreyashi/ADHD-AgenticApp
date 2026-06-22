@@ -79,16 +79,6 @@ export function FamilyOverview({ profiles, activeId, onSelectChild, onAddChild }
             </button>
           );
         })}
-
-        <button
-          onClick={onAddChild}
-          className="card w-full text-left border-2 border-dashed border-slate-200 hover:border-brand-300 transition-all flex items-center gap-3"
-        >
-          <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center">
-            <Plus size={18} className="text-slate-500" />
-          </div>
-          <p className="font-semibold text-slate-600">Add Another Child</p>
-        </button>
       </div>
     </div>
   );
