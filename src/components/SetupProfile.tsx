@@ -1,13 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { v4 as uuid } from 'uuid';
+import { track } from '@vercel/analytics';
 import { ChildProfile } from '../types';
 import { saveProfile } from '../utils/storage';
 
 interface Props {
   onComplete: (profile: ChildProfile) => void;
+  onCancel?: () => void;
 }
 
-export function SetupProfile({ onComplete }: Props) {
+export function SetupProfile({ onComplete, onCancel }: Props) {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
     name: '',
@@ -23,6 +25,11 @@ export function SetupProfile({ onComplete }: Props) {
   });
 
   const DIAGNOSES = ['ADHD - Inattentive', 'ADHD - Hyperactive', 'ADHD - Combined', 'ASD', 'Anxiety', 'ODD', 'Sensory Processing Disorder'];
+
+  // Track which onboarding step each visitor reaches, to spot where they drop off before ever seeing the app
+  useEffect(() => {
+    track('view_onboarding_step', { step });
+  }, [step]);
 
   const toggleDiagnosis = (d: string) => {
     setForm(f => ({
@@ -47,6 +54,7 @@ export function SetupProfile({ onComplete }: Props) {
       createdAt: new Date().toISOString(),
     };
     saveProfile(profile);
+    track('onboarding_complete');
     onComplete(profile);
   };
 
@@ -66,13 +74,21 @@ export function SetupProfile({ onComplete }: Props) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-brand-50 to-indigo-50 flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
+        {onCancel && (
+          <button onClick={onCancel} className="text-sm text-slate-500 hover:text-slate-700 mb-4 font-medium">
+            ← Back to My Children
+          </button>
+        )}
         {/* Header */}
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-brand-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
             <span className="text-3xl">🧠</span>
           </div>
-          <h1 className="text-2xl font-bold text-slate-800">ADHD Behavior Tracker</h1>
-          <p className="text-slate-500 mt-1">AI-powered daily tracking for parents & therapists</p>
+          <h1 className="text-2xl font-bold text-slate-800">{onCancel ? 'Add Another Child' : 'ADHD Behavior Tracker'}</h1>
+          <p className="text-slate-500 mt-1">{onCancel ? "Set up a profile for your other child." : 'AI-powered daily tracking for parents & therapists'}</p>
+          <p className="text-xs text-brand-700 bg-brand-50 border border-brand-200 rounded-xl px-4 py-2 mt-4 inline-block">
+            We do not store the confidential data. The data is stored at user browser level.
+          </p>
         </div>
 
         <div className="card shadow-md animate-fade-in">
