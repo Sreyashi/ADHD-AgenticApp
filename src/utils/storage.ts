@@ -231,13 +231,13 @@ ${'='.repeat(60)}
   const entries = logs.map(log => `
 Date: ${new Date(log.date).toLocaleDateString()} at ${log.time}
 Location: ${log.location}
-Triggers: ${log.triggers.join(', ') || 'None noted'}${log.customTrigger ? `, ${log.customTrigger}` : ''}
-Behaviors: ${log.behaviors.join(', ') || 'None noted'}
+Triggers: ${Array.isArray(log.triggers) ? log.triggers.join(', ') || 'None noted' : 'None noted'}${log.customTrigger ? `, ${log.customTrigger}` : ''}
+Behaviors: ${Array.isArray(log.behaviors) ? log.behaviors.join(', ') || 'None noted' : 'None noted'}
 Meltdown Level: ${log.meltdownLevel}/5
 Focus Level: ${log.focusLevel}/5
 Mood Level: ${log.moodLevel}/5
 Duration: ${log.duration} min
-Resolved by: ${log.resolvedBy.join(', ') || 'None noted'}
+Resolved by: ${Array.isArray(log.resolvedBy) ? log.resolvedBy.join(', ') || 'None noted' : 'None noted'}
 Notes: ${log.notes || 'None'}
 ${'-'.repeat(40)}`).join('\n');
 

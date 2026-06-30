@@ -23,9 +23,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'At least 3 logs are required for analysis' });
   }
 
-  const logsText = logs.slice(0, 60).map((l) =>
-    `Date: ${l.date} ${l.time} | Location: ${l.location} | Triggers: ${(l.triggers as string[]).join(', ') || 'none'} | Behaviors: ${(l.behaviors as string[]).join(', ') || 'none'} | Meltdown: ${l.meltdownLevel}/5 | Focus: ${l.focusLevel}/5 | Mood: ${l.moodLevel}/5 | Duration: ${l.duration}min | Resolved by: ${(l.resolvedBy as string[]).join(', ') || 'none'} | Notes: ${l.notes || '—'}`
-  ).join('\n');
+  const logsText = logs.slice(0, 60).map((l) => {
+    const triggers = Array.isArray(l.triggers) ? l.triggers.join(', ') : 'none';
+    const behaviors = Array.isArray(l.behaviors) ? l.behaviors.join(', ') : 'none';
+    const resolvedBy = Array.isArray(l.resolvedBy) ? l.resolvedBy.join(', ') : 'none';
+    return `Date: ${l.date} ${l.time} | Location: ${l.location} | Triggers: ${triggers || 'none'} | Behaviors: ${behaviors || 'none'} | Meltdown: ${l.meltdownLevel}/5 | Focus: ${l.focusLevel}/5 | Mood: ${l.moodLevel}/5 | Duration: ${l.duration}min | Resolved by: ${resolvedBy || 'none'} | Notes: ${l.notes || '—'}`;
+  }).join('\n');
 
   const systemPrompt = `You are an expert AI assistant specializing in ADHD behavior analysis for parents and therapists.
 Analyze behavior logs, identify patterns, track therapy progress, and provide actionable insights.
