@@ -4,12 +4,14 @@ import { Brain, RefreshCw, CheckCircle, AlertTriangle, TrendingUp, TrendingDown,
 import { v4 as uuid } from 'uuid';
 import { ChildProfile, BehaviorLog, AIAnalysis, InsightItem } from '../types';
 import { saveAnalysis } from '../utils/storage';
+import { InsightsAgent } from './InsightsAgent';
 
 interface Props {
   profile: ChildProfile;
   logs: BehaviorLog[];
   analysis: AIAnalysis | null;
   onAnalysisUpdated: (a: AIAnalysis) => void;
+  onGoToSettings: () => void;
 }
 
 const INSIGHT_ICON = {
@@ -67,7 +69,7 @@ function getLoggedDaySpan(logs: BehaviorLog[]): number {
   return Math.floor(spanMs / (1000 * 60 * 60 * 24)) + 1;
 }
 
-export function AIInsights({ profile, logs, analysis, onAnalysisUpdated }: Props) {
+export function AIInsights({ profile, logs, analysis, onAnalysisUpdated, onGoToSettings }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const loggedDaySpan = getLoggedDaySpan(logs);
@@ -323,6 +325,8 @@ export function AIInsights({ profile, logs, analysis, onAnalysisUpdated }: Props
               </div>
             </div>
           )}
+
+          <InsightsAgent profile={profile} logs={logs} analysis={analysis} onGoToSettings={onGoToSettings} />
         </>
       )}
     </div>

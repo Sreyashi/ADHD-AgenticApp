@@ -159,6 +159,7 @@ export default function App() {
             logs={logs}
             analysis={analysis}
             onAnalysisUpdated={a => setAnalysis(a)}
+            onGoToSettings={() => setCurrentView('settings')}
           />
         );
       case 'therapists':

@@ -54,6 +54,11 @@ export interface AIAnalysis {
   summary: string;
 }
 
+export interface AgentMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 export interface TherapistResult {
   id: string;
   name: string;
