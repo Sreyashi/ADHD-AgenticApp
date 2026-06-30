@@ -17,10 +17,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured.' });
   }
 
+  try {
   const { profile, logs } = req.body as { profile: Record<string, unknown>; logs: Record<string, unknown>[] };
 
   if (!logs || logs.length < 3) {
     return res.status(400).json({ error: 'At least 3 logs are required for analysis' });
+  }
+  if (!profile) {
+    return res.status(400).json({ error: 'A child profile is required for analysis' });
   }
 
   const logsText = logs.slice(0, 60).map((l) => {
@@ -30,11 +34,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return `Date: ${l.date} ${l.time} | Location: ${l.location} | Triggers: ${triggers || 'none'} | Behaviors: ${behaviors || 'none'} | Meltdown: ${l.meltdownLevel}/5 | Focus: ${l.focusLevel}/5 | Mood: ${l.moodLevel}/5 | Duration: ${l.duration}min | Resolved by: ${resolvedBy || 'none'} | Notes: ${l.notes || '—'}`;
   }).join('\n');
 
+  const diagnosisText = Array.isArray(profile.diagnosis) ? profile.diagnosis.join(', ') : 'unspecified';
+
   const systemPrompt = `You are an expert AI assistant specializing in ADHD behavior analysis for parents and therapists.
 Analyze behavior logs, identify patterns, track therapy progress, and provide actionable insights.
 Be empathetic, data-driven, and practical. Always respond with valid JSON only — no markdown, no code blocks.`;
 
-  const userPrompt = `Analyze the following behavior logs for ${profile.name}, age ${profile.age}, diagnosed with: ${(profile.diagnosis as string[]).join(', ')}.
+  const userPrompt = `Analyze the following behavior logs for ${profile.name}, age ${profile.age}, diagnosed with: ${diagnosisText}.
 Therapy started: ${profile.therapyStartDate || 'unknown'}. Current therapist: ${profile.currentTherapist || 'unknown'}.
 
 BEHAVIOR LOGS (most recent first):
@@ -116,4 +122,9 @@ Rules:
   await new Promise(r => setTimeout(r, 500));
 
   return res.status(200).json(analysisData);
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[DIAG] Unexpected error in ai-insights handler:', error);
+    return res.status(500).json({ error: `Analysis failed: ${msg}` });
+  }
 }
