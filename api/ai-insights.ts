@@ -1,77 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Anthropic from '@anthropic-ai/sdk';
-
-// ── Arize AX Tracing — zero OTel dependencies, plain fetch ───────────────────
-function randomHex(bytes: number) {
-  return Array.from(crypto.getRandomValues(new Uint8Array(bytes)))
-    .map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-async function sendTrace({
-  model, inputTokens, outputTokens, prompt, response, durationMs,
-}: {
-  model: string; inputTokens: number; outputTokens: number;
-  prompt: string; response: string; durationMs: number;
-}) {
-  const apiKey = process.env.ARIZE_API_KEY;
-  const spaceId = process.env.ARIZE_SPACE_ID;
-
-  console.log('[Arize] sendTrace called. apiKey:', !!apiKey, 'spaceId:', !!spaceId);
-
-  if (!apiKey || !spaceId) {
-    console.log('[Arize] Skipping — keys missing');
-    return;
-  }
-
-  const endNs = BigInt(Date.now()) * 1_000_000n;
-  const startNs = endNs - BigInt(durationMs) * 1_000_000n;
-
-  const payload = {
-    resourceSpans: [{
-      resource: {
-        attributes: [
-          { key: 'service.name',               value: { stringValue: 'adhd-behavior-tracker' } },
-          { key: 'openinference.project.name', value: { stringValue: 'adhd-behavior-tracker' } },
-        ],
-      },
-      scopeSpans: [{
-        scope: { name: 'adhd-tracker', version: '1.0.0' },
-        spans: [{
-          traceId:           randomHex(16),
-          spanId:            randomHex(8),
-          name:              'anthropic.messages.create',
-          kind:              3,
-          startTimeUnixNano: String(startNs),
-          endTimeUnixNano:   String(endNs),
-          attributes: [
-            { key: 'openinference.span.kind',    value: { stringValue: 'LLM' } },
-            { key: 'llm.model_name',             value: { stringValue: model } },
-            { key: 'llm.token_count.prompt',     value: { intValue: inputTokens } },
-            { key: 'llm.token_count.completion', value: { intValue: outputTokens } },
-            { key: 'llm.token_count.total',      value: { intValue: inputTokens + outputTokens } },
-            { key: 'input.value',                value: { stringValue: prompt.slice(0, 1000) } },
-            { key: 'output.value',               value: { stringValue: response.slice(0, 1000) } },
-          ],
-          status: { code: 1 },
-        }],
-      }],
-    }],
-  };
-
-  console.log('[Arize] Sending fetch to otlp.arize.com...');
-  const r = await fetch('https://otlp.arize.com/v1/traces', {
-    method: 'POST',
-    headers: {
-      'Content-Type':     'application/json',
-      'space_id': spaceId,
-      'api_key':  apiKey,
-    },
-    body: JSON.stringify(payload),
-  });
-  const body = await r.text().catch(() => '');
-  console.log('[Arize] Response:', r.status, body);
-}
-// ─────────────────────────────────────────────────────────────────────────────
+import { sendTrace } from './_lib/arizeTrace';
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -157,6 +86,7 @@ Rules:
   // Always send trace — even if JSON parsing fails below
   const durationMs = Date.now() - t0;
   sendTrace({
+    spanName:     'anthropic.messages.create',
     model:        claudeResponse.model,
     inputTokens:  claudeResponse.usage.input_tokens,
     outputTokens: claudeResponse.usage.output_tokens,

@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Anthropic from '@anthropic-ai/sdk';
+import { sendTrace } from './_lib/arizeTrace';
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -54,6 +55,7 @@ suitable for a therapist email — start that reply with the exact line "THERAPI
 so the app can detect it, followed by the summary text. Keep replies to a short paragraph or a few bullet
 points — this is a chat, not a full report.`;
 
+  const t0 = Date.now();
   try {
     const response = await client.messages.create({
       model: 'claude-sonnet-4-6',
@@ -62,6 +64,19 @@ points — this is a chat, not a full report.`;
       messages: messages.map(m => ({ role: m.role, content: m.content })),
     });
     const reply = (response.content[0] as { type: string; text: string }).text.trim();
+
+    sendTrace({
+      spanName:     'anthropic.messages.create',
+      model:        response.model,
+      inputTokens:  response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      prompt:       messages[messages.length - 1].content,
+      response:     reply,
+      durationMs:   Date.now() - t0,
+    }).catch(e => console.error('[Arize] sendTrace threw:', e));
+
+    await new Promise(r => setTimeout(r, 500));
+
     return res.status(200).json({ reply });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Unknown error';

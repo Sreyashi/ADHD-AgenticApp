@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Anthropic from '@anthropic-ai/sdk';
+import { sendTrace } from './_lib/arizeTrace';
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -66,6 +67,7 @@ Generate 5-6 realistic therapist profiles for ${location}:
 - Vary telehealth availability, accepting status, and specialties
 - Specializing in ADHD, behavioral issues, and parent coaching`;
 
+  const t0 = Date.now();
   try {
     const response = await client.messages.create({
       model: 'claude-sonnet-4-6',
@@ -75,6 +77,16 @@ Generate 5-6 realistic therapist profiles for ${location}:
     });
 
     const rawText = (response.content[0] as { type: string; text: string }).text.trim();
+
+    sendTrace({
+      spanName:     'anthropic.messages.create',
+      model:        response.model,
+      inputTokens:  response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      prompt:       userPrompt,
+      response:     rawText,
+      durationMs:   Date.now() - t0,
+    }).catch(e => console.error('[Arize] sendTrace threw:', e));
 
     let data: Record<string, unknown>;
     try {
@@ -87,6 +99,8 @@ Generate 5-6 realistic therapist profiles for ${location}:
         throw new Error('Failed to parse AI response as JSON');
       }
     }
+
+    await new Promise(r => setTimeout(r, 500));
 
     return res.status(200).json(data);
   } catch (error: unknown) {

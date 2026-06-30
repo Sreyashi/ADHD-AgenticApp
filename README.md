@@ -118,9 +118,9 @@ These are tracked manually today by reviewing logged data and analysis runs.
 
 ## AI Observability & Evals
 
-Every call the monitoring agent makes to Claude is traced with **Arize AX**, an LLM observability platform, so the agent's reasoning is inspectable rather than a black box.
+Every call any of the three Claude agents makes is traced with **Arize AX**, an LLM observability platform, so each agent's reasoning is inspectable rather than a black box.
 
-**What's captured per call** (`api/ai-insights.ts`):
+**What's captured per call** (`api/ai-insights.ts`, `api/therapist-finder.ts`, `api/insights-agent.ts`, via the shared `api/_lib/arizeTrace.ts` helper):
 - Full prompt and response text (input/output)
 - Model name and token usage (prompt / completion / total)
 - Latency (start/end timestamps)
@@ -128,15 +128,16 @@ Every call the monitoring agent makes to Claude is traced with **Arize AX**, an 
 
 **How it works:** after each successful Claude response, the function builds an OpenTelemetry-style span and POSTs it to Arize's OTLP endpoint (`https://otlp.arize.com/v1/traces`), authenticated with `ARIZE_API_KEY` / `ARIZE_SPACE_ID` environment variables. Tracing is best-effort — if those env vars aren't set, the function skips it silently and the user-facing response is unaffected.
 
-**Evals:** beyond raw tracing, Arize is used to run **usefulness evaluations** against the monitoring agent's real outputs — checking that:
-- `trend` only reports `"declining"` when the rule (3+ weeks worsening) is actually met
-- `recommendChangeTherapist` is only `true` after 4+ weeks of no improvement, never as a false alarm
-- `topTriggers` and insights are grounded in the actual logs sent in, not fabricated
-- the agent explicitly says when it lacks data, rather than guessing
+**Evals:** beyond raw tracing, Arize runs a few targeted evaluators against each agent's real traces rather than one generic "usefulness" score:
 
-Eval datasets are built from **real traces** of this app's own input/output pairs (not generic templates), so scores reflect whether the agent is doing the specific job it was prompted to do.
+- **Hallucination / groundedness** (`ai-insights.ts`, `insights-agent.ts`) — checks the response only states facts present in the input (the behavior logs, or the trigger-window counts) and never invents numbers or patterns. Doesn't apply to `therapist-finder.ts`, since those therapist profiles are intentionally AI-generated examples with a verify-before-contacting disclaimer, not claims grounded in real data.
+- **Correctness / rule-adherence** (custom LLM-as-judge, `ai-insights.ts`) — a judge prompt built from this app's own business rules, checking that `trend` only reports `"declining"` when the 3+-week-worsening rule is met, and `recommendChangeTherapist` is only `true` after 4+ weeks of no improvement.
+- **Format / schema compliance** (deterministic, all three agents) — does the JSON response parse and match the expected shape; for `insights-agent.ts`, does a therapist-summary reply actually start with the literal `THERAPIST SUMMARY:` line the frontend looks for.
+- **Tone / empathy** (custom LLM-as-judge, `insights-agent.ts`) — Arize has no built-in tone template, so this is a custom evaluator with its own rubric (`empathetic` / `clinical` / `dismissive`) checking replies stay supportive and plain-language for a parent of a child with ADHD, rather than cold or clinical.
 
-**To set this up yourself:** add `ANTHROPIC_API_KEY`, `ARIZE_API_KEY`, and `ARIZE_SPACE_ID` as environment variables in your Vercel project (Production environment), then trigger a few analyses from the **Insights** view — traces will appear in your Arize space under the `adhd-behavior-tracker` project within a minute.
+Eval datasets are built from **real traces** of this app's own input/output pairs (not generic templates), so scores reflect whether each agent is doing the specific job it was prompted to do.
+
+**To set this up yourself:** add `ANTHROPIC_API_KEY`, `ARIZE_API_KEY`, and `ARIZE_SPACE_ID` as environment variables in your Vercel project (Production environment), then trigger a few analyses, therapist searches, or insights-agent chats — traces will appear in your Arize space under the `adhd-behavior-tracker` project within a minute. Custom evaluators (Correctness, Tone) are configured directly in the Arize AX UI under each project's Evaluators tab.
 
 ## Data Storage & Roadmap
 
